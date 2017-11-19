@@ -1,0 +1,4 @@
+always: FORCE
+	echo $(BOOST_SYSTEM_INCLUDE_PATH)
+
+FORCE:
