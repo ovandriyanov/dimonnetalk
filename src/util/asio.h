@@ -11,6 +11,7 @@
 
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/signal_set.hpp>
+#include <boost/asio/buffer.hpp>
 #include <boost/coroutine2/all.hpp>
 
 #include "util/callback_wrapper.h"
@@ -39,5 +40,21 @@ private:
 };
 
 } // namespace util
+
+namespace boost {
+namespace asio {
+
+inline const char* begin(const boost::asio::const_buffer& buf)
+{
+    return boost::asio::buffer_cast<const char*>(buf);
+}
+
+inline const char* end(const boost::asio::const_buffer& buf)
+{
+    return boost::asio::buffer_cast<const char*>(buf) + boost::asio::buffer_size(buf);
+}
+
+} // namespace asio
+} // namespace boost
 
 #endif // UTIL_ASIO_H

@@ -11,4 +11,7 @@ if(BOOST_INCLUDE_PATH)
     include_directories("${BOOST_INCLUDE_PATH}")
 endif()
 
-add_library(util asio.cpp)
+add_library(util
+    asio.cpp
+    file_chunk_range.cpp
+)
