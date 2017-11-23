@@ -25,7 +25,7 @@ int main() try
     util::signal_set_t sigset_term{io_service, SIGTERM, SIGINT};
     util::signal_set_t sigset_hup{io_service, SIGHUP};
 
-    auto inventory = fw::make_inventory();
+    auto inventory = fw::make_inventory("config.json");
     inventory.reload();
 
     util::callback_wrapper_t callback_wrapper;
@@ -43,7 +43,7 @@ int main() try
     }};
 
     util::coro_t<void>::pull_type term_resume([&](util::coro_t<void>::push_type& yield) {
-        BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGTERM";
+        BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGTERM/SIGINT";
         int sig = sigset_term.async_wait(yield, term_resume);
         BOOST_LOG_TRIVIAL(info) << "Termination signal received, stopping...";
         inventory.stop(io_service, []() { BOOST_LOG_TRIVIAL(info) << "Stopped"; });
