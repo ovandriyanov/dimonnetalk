@@ -1,0 +1,9 @@
+{
+    "bots": [
+        {
+            "name": "dimonnetalk",
+            "script_path": "dimonnetalk.lua",
+            "api_token": "some_token"
+        }
+    ]
+}
