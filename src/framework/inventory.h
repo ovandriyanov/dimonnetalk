@@ -12,6 +12,10 @@
 #include <list>
 #include <memory>
 
+#include <boost/coroutine2/all.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/optional.hpp>
+
 #include "framework/service.h"
 
 namespace framework {
@@ -25,10 +29,13 @@ public:
     void stop(boost::asio::io_service& io_service, std::function<void()> cb);
 
 private:
+    using coro_t = boost::coroutines2::coroutine<void>;
+
     std::list<std::unique_ptr<service_t>> services_;
+    boost::optional<coro_t::pull_type> stop_coro_;
 };
 
-inventory_t make_inventory();
+inventory_t make_inventory(boost::filesystem::path config_path);
 
 } // namespace framework
 
