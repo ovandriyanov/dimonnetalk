@@ -7,9 +7,11 @@
  */
 
 #include <boost/asio/signal_set.hpp>
+#include <boost/coroutine2/all.hpp>
 #include <boost/log/trivial.hpp>
 
 #include "framework/inventory.h"
+#include "util/asio.h"
 
 #include <type_traits>
 
@@ -19,40 +21,35 @@ namespace fw = framework;
 int main() try
 {
     boost::asio::io_service io_service{1};
-    bool stop = false;
 
-    boost::system::error_code ec;
-
-    boost::asio::signal_set sigset_term{io_service};
-    sigset_term.add(SIGTERM, ec);
-    if(ec) throw system_error{ec, "signal"};
-    sigset_term.add(SIGINT, ec);
-    if(ec) throw system_error{ec, "signal"};
-
-    boost::asio::signal_set sigset_hup{io_service};
-    sigset_term.add(SIGHUP, ec);
-    if(ec) throw system_error{ec, "signal"};
+    util::signal_set_t sigset_term{io_service, SIGTERM, SIGINT};
+    util::signal_set_t sigset_hup{io_service, SIGHUP};
 
     auto inventory = fw::make_inventory();
     inventory.reload();
 
-    sigset_term.async_wait([&](error_code ec, int /* signal */) {
-        if(ec) {
-            if(ec == boost::asio::error::operation_aborted) return;
-            throw system_error{ec, "signal"};
+    util::callback_wrapper_t callback_wrapper;
+
+    bool stop = false;
+    util::coro_t<void>::pull_type hup_resume{[&](util::coro_t<void>::push_type& yield) {
+        while(true) {
+            BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGHUP";
+            sigset_hup.async_wait(yield, hup_resume);
+            if(stop) return;
+
+            BOOST_LOG_TRIVIAL(info) << "SIGHUP received, reloading";
+            inventory.reload();
         }
+    }};
+
+    util::coro_t<void>::pull_type term_resume([&](util::coro_t<void>::push_type& yield) {
+        BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGTERM";
+        int sig = sigset_term.async_wait(yield, term_resume);
         BOOST_LOG_TRIVIAL(info) << "Termination signal received, stopping...";
         inventory.stop(io_service, []() { BOOST_LOG_TRIVIAL(info) << "Stopped"; });
-        sigset_hup.cancel();
-    });
 
-    sigset_hup.async_wait([&](error_code ec, int /* signal */) {
-        if(ec) {
-            if(ec == boost::asio::error::operation_aborted) return;
-            throw system_error{ec, "signal"};
-        }
-        BOOST_LOG_TRIVIAL(info) << "SIGHUP received, reloading";
-        inventory.reload();
+        stop = true;
+        sigset_hup.cancel(hup_resume);
     });
 
     io_service.run();

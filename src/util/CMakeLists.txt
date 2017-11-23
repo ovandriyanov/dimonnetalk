@@ -11,4 +11,4 @@ if(BOOST_INCLUDE_PATH)
     include_directories("${BOOST_INCLUDE_PATH}")
 endif()
 
-add_library(framework inventory.cpp)
+add_library(util asio.cpp)
