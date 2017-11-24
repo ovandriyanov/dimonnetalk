@@ -22,7 +22,9 @@ namespace {
 class config_service_t : public service_t
 {
 public:
-    config_service_t(fs::path config_path) : config_path_{std::move(config_path)} {}
+    config_service_t(boost::asio::io_service& io_service, fs::path config_path)
+        : service_t{io_service}
+        , config_path_{std::move(config_path)} {}
 
     config_t& config() { return config_; }
 
@@ -56,7 +58,7 @@ void inventory_t::stop(boost::asio::io_service& io_service, std::function<void()
 
     stop_coro_.emplace([&, cb = std::move(cb)](coro_t::push_type& yield) {
         for(auto& s : services_ | reversed)
-            s->stop(io_service, [&]() { (*stop_coro_)(); });
+            s->stop([&]() { (*stop_coro_)(); });
         for(int i = services_.size(); i; --i)
             yield();
         services_.clear();
@@ -64,9 +66,9 @@ void inventory_t::stop(boost::asio::io_service& io_service, std::function<void()
     });
 }
 
-inventory_t make_inventory(fs::path config_path)
+inventory_t make_inventory(boost::asio::io_service& io_service, fs::path config_path)
 {
-    auto config_service = std::make_unique<config_service_t>(config_path);
+    auto config_service = std::make_unique<config_service_t>(io_service, config_path);
 
     std::list<std::unique_ptr<service_t>> services;
     services.emplace_back(std::move(config_service));

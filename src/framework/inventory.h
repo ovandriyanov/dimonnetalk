@@ -35,7 +35,7 @@ private:
     boost::optional<coro_t::pull_type> stop_coro_;
 };
 
-inventory_t make_inventory(boost::filesystem::path config_path);
+inventory_t make_inventory(boost::asio::io_service& io_service, boost::filesystem::path config_path);
 
 } // namespace framework
 

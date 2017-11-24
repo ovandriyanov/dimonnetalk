@@ -25,7 +25,7 @@ int main() try
     util::signal_set_t sigset_term{io_service, SIGTERM, SIGINT};
     util::signal_set_t sigset_hup{io_service, SIGHUP};
 
-    auto inventory = fw::make_inventory("config.json");
+    auto inventory = fw::make_inventory(io_service, "config.json");
     inventory.reload();
 
     util::callback_wrapper_t callback_wrapper;
