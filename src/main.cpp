@@ -30,26 +30,25 @@ int main() try
 
     util::callback_wrapper_t callback_wrapper;
 
-    bool stop = false;
-    util::coro_t<void>::pull_type hup_resume{[&](util::coro_t<void>::push_type& yield) {
+    boost::optional<util::coro_t<void>::pull_type> hup_resume{[&](util::coro_t<void>::push_type& yield) {
         while(true) {
             BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGHUP";
+            BOOST_LOG_TRIVIAL(debug) << "IS_INITIALIZED: " << hup_resume.is_initialized();
             sigset_hup.async_wait(yield, hup_resume);
-            if(stop) return;
 
             BOOST_LOG_TRIVIAL(info) << "SIGHUP received, reloading";
             inventory.reload();
         }
     }};
 
-    util::coro_t<void>::pull_type term_resume([&](util::coro_t<void>::push_type& yield) {
+    boost::optional<util::coro_t<void>::pull_type> term_resume([&](util::coro_t<void>::push_type& yield) {
         BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGTERM/SIGINT";
         int sig = sigset_term.async_wait(yield, term_resume);
         BOOST_LOG_TRIVIAL(info) << "Termination signal received, stopping...";
         inventory.stop(io_service, []() { BOOST_LOG_TRIVIAL(info) << "Stopped"; });
 
-        stop = true;
-        sigset_hup.cancel(hup_resume);
+        sigset_hup.cancel();
+        hup_resume = boost::none;
     });
 
     io_service.run();

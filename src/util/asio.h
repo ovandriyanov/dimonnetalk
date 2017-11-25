@@ -9,10 +9,12 @@
 #ifndef UTIL_ASIO_H
 #define UTIL_ASIO_H
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/signal_set.hpp>
 #include <boost/asio/buffer.hpp>
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <boost/coroutine2/all.hpp>
+#include <boost/optional.hpp>
 
 #include "util/callback_wrapper.h"
 
@@ -31,13 +33,25 @@ public:
     void add(int signal);
     void clear();
 
-    int async_wait(coro_t<void>::push_type& yield, coro_t<void>::pull_type& resume);
+    int async_wait(coro_t<void>::push_type& yield, boost::optional<coro_t<void>::pull_type>& resume);
     void cancel();
     void cancel(coro_t<void>::pull_type& resume);
 
 private:
     boost::asio::signal_set sigset_;
 };
+
+boost::system::error_code async_connect(boost::asio::ip::tcp::socket& socket,
+                                        const boost::asio::ip::tcp::endpoint& endpoint,
+                                        callback_wrapper_t& callback_wrapper,
+                                        coro_t<void>::push_type& yield,
+                                        coro_t<void>::pull_type& resume);
+
+// boost::system::error_code async_handshake(,
+//                                           const boost::asio::ip::tcp::endpoint& endpoint,
+//                                           callback_wrapper_t& callback_wrapper,
+//                                           coro_t<void>::push_type& yield,
+//                                           coro_t<void>::pull_type& resume);
 
 } // namespace util
 

@@ -13,8 +13,16 @@
 #include <vector>
 
 #include <boost/filesystem.hpp>
+#include <boost/variant.hpp>
 
 namespace framework {
+
+struct longpoll_config_t
+{
+    std::string host;
+};
+
+using event_source_config_t = boost::variant<longpoll_config_t>;
 
 struct bot_config_t
 {
@@ -25,6 +33,7 @@ struct bot_config_t
 
 struct config_t
 {
+    event_source_config_t event_source_config;
     std::vector<bot_config_t> bots;
 };
 
