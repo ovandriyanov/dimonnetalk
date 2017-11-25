@@ -11,7 +11,9 @@
 
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
+#include <boost/asio/ssl.hpp>
 #include <boost/coroutine2/all.hpp>
 #include <boost/variant.hpp>
 
@@ -38,6 +40,43 @@ async_wait(boost::asio::signal_set& sigset,
 
     if(ec) return ec;
     return signo;
+}
+
+template <typename CoroutinePtr>
+boost::system::error_code
+async_connect(boost::asio::ip::tcp::socket& socket,
+              const boost::asio::ip::tcp::endpoint& endpoint,
+              util::callback_wrapper_t& callback_wrapper,
+              boost::coroutines2::coroutine<void>::push_type& yield,
+              CoroutinePtr& resume)
+{
+    boost::system::error_code ec;
+
+    socket.async_connect(callback_wrapper.wrap([&](boost::system::error_code _ec) {
+        ec = _ec;
+        (*resume)();
+    }));
+    yield();
+
+    return ec;
+}
+
+template <typename CoroutinePtr>
+boost::system::error_code
+async_handshake(boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& ssl_stream,
+                util::callback_wrapper_t& callback_wrapper,
+                boost::coroutines2::coroutine<void>::push_type& yield,
+                CoroutinePtr& resume)
+{
+    boost::system::error_code ec;
+
+    ssl_stream.async_handshake(callback_wrapper.wrap([&](boost::system::error_code _ec) {
+        ec = _ec;
+        (*resume)();
+    }));
+    yield();
+
+    return ec;
 }
 
 } // namespace util
