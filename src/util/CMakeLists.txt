@@ -12,6 +12,5 @@ if(BOOST_INCLUDE_PATH)
 endif()
 
 add_library(util
-    asio.cpp
     file_chunk_range.cpp
 )

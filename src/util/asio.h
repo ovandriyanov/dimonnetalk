@@ -9,35 +9,36 @@
 #ifndef UTIL_ASIO_H
 #define UTIL_ASIO_H
 
+#include <boost/asio/buffer.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/signal_set.hpp>
-#include <boost/asio/buffer.hpp>
 #include <boost/coroutine2/all.hpp>
+#include <boost/variant.hpp>
 
 #include "util/callback_wrapper.h"
 
 namespace util {
 
-template <typename T>
-using coro_t = boost::coroutines2::coroutine<T>;
-
-class signal_set_t : private callback_wrapper_t
+template <typename CoroutinePtr>
+boost::variant<boost::system::error_code, int>
+async_wait(boost::asio::signal_set& sigset,
+           util::callback_wrapper_t& callback_wrapper,
+           boost::coroutines2::coroutine<void>::push_type& yield,
+           CoroutinePtr& resume)
 {
-public:
-    signal_set_t(boost::asio::io_service& io_service);
-    signal_set_t(boost::asio::io_service& io_service, int signo);
-    signal_set_t(boost::asio::io_service& io_service, int signo1, int signo2);
+    boost::system::error_code ec;
+    int signo;
 
-    void add(int signal);
-    void clear();
+    sigset.async_wait(callback_wrapper.wrap([&](boost::system::error_code _ec, int _signo) {
+        ec = _ec;
+        signo = _signo;
+        (*resume)();
+    }));
+    yield();
 
-    int async_wait(coro_t<void>::push_type& yield, coro_t<void>::pull_type& resume);
-    void cancel();
-    void cancel(coro_t<void>::pull_type& resume);
-
-private:
-    boost::asio::signal_set sigset_;
-};
+    if(ec) return ec;
+    return signo;
+}
 
 } // namespace util
 
