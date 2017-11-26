@@ -6,6 +6,7 @@
  *
  */
 
+#include <boost/log/trivial.hpp>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
 
@@ -31,8 +32,11 @@ void update_source_switch_t::reload()
             if(!source_switch_.update_source_) {
                 // Initial construction
                 longpoll_update_sources_t sources;
-                for(const auto& bot_config : source_switch_.config_.bots)
-                    sources.emplace_back(std::make_unique<longpoll_update_source_t>(source_switch_.io_service_, cfg, bot_config.api_token));
+                for(const auto& bot_config : source_switch_.config_.bots) {
+                    sources.emplace_back(std::make_unique<longpoll_update_source_t>(
+                        source_switch_.io_service_, cfg, bot_config.api_token,
+                        [](nlohmann::json update) { BOOST_LOG_TRIVIAL(debug) << "Got update: " << update.dump(); }));
+                }
                 source_switch_.update_source_ = std::move(sources);
             }
             assert(source_switch_.update_source_);

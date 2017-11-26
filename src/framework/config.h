@@ -22,6 +22,7 @@ struct longpoll_config_t
     std::string host;
     uint16_t port;
     int retry_timeout;
+    int poll_timeout;
 };
 
 using update_source_config_t = boost::variant<longpoll_config_t>;

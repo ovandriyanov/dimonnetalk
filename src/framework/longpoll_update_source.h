@@ -14,6 +14,8 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/coroutine2/all.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include "framework/config.h"
 #include "util/callback_wrapper.h"
 
@@ -24,7 +26,8 @@ class longpoll_update_source_t : private util::callback_wrapper_t
 public:
     longpoll_update_source_t(boost::asio::io_service& io_service,
                              const longpoll_config_t& config,
-                             std::string api_token);
+                             std::string api_token,
+                             std::function<void(nlohmann::json)> update_callback);
 
     const std::string& api_token() const { return api_token_; }
 
@@ -49,6 +52,7 @@ private:
     boost::asio::io_service& io_service_;
     const longpoll_config_t& config_;
     const std::string api_token_;
+    std::function<void(nlohmann::json)> update_callback_;
 
     std::string host_;
     uint16_t port_;
@@ -56,6 +60,7 @@ private:
     std::unique_ptr<ssl_t> ssl_;
     std::unique_ptr<coro_t::pull_type> resume_;
     std::list<std::unique_ptr<finishing_t>> finishing_;
+    int last_update_id_;
 };
 
 } // namespace framework

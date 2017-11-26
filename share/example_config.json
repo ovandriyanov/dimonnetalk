@@ -3,7 +3,8 @@
         "type": "longpoll",
         "host": "api.telegram.org",
         "port": 443,
-        "retry_timeout": 5
+        "retry_timeout": 5,
+        "poll_timeout": 30
     },
     "bots": [
         {
