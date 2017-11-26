@@ -15,4 +15,8 @@ if(JSON_INCLUDE_PATH)
     include_directories("${JSON_INCLUDE_PATH}")
 endif()
 
-add_library(framework inventory.cpp config.cpp)
+add_library(framework
+    inventory.cpp
+    config.cpp
+    longpoll_update_source.cpp
+    update_source_switch.cpp)

@@ -20,9 +20,11 @@ namespace framework {
 struct longpoll_config_t
 {
     std::string host;
+    uint16_t port;
+    int retry_timeout;
 };
 
-using event_source_config_t = boost::variant<longpoll_config_t>;
+using update_source_config_t = boost::variant<longpoll_config_t>;
 
 struct bot_config_t
 {
@@ -33,8 +35,8 @@ struct bot_config_t
 
 struct config_t
 {
-    event_source_config_t event_source_config;
     std::vector<bot_config_t> bots;
+    update_source_config_t update_source;
 };
 
 config_t load_config(const boost::filesystem::path& path);

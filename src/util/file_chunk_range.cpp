@@ -19,16 +19,16 @@ file_chunk_range_t::file_chunk_range_t(const boost::filesystem::path& path)
     : chunk_source_{[=](coro_t::push_type& yield)
 {
     fs::ifstream is{path};
-    if(!is) throw system_error{error_code{errno, system_category()}, "open"};
+    if(!is) throw system_error{error_code{errno, system_category()}, "Cannot open " + path.string()};
 
     char buf[BUFSIZ];
-    do {
-        is.read(buf, sizeof(buf));
-        if(is.gcount())
-            yield(boost::asio::buffer(buf, is.gcount()));
-    } while(is);
+    while(is.read(buf, sizeof(buf)))
+        yield(boost::asio::buffer(buf, is.gcount()));
 
-    if(is.bad()) throw system_error{error_code(errno, system_category()), "read"};
+    if(is.bad()) throw system_error{error_code(errno, system_category()), "Cannot read " + path.string()};
+
+    if(is.gcount())
+        yield(boost::asio::buffer(buf, is.gcount()));
 }}
 {
 }

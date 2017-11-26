@@ -10,6 +10,7 @@
 
 #include "framework/config.h"
 #include "framework/inventory.h"
+#include "framework/update_source_switch.h"
 
 #include <boost/log/trivial.hpp>
 
@@ -23,8 +24,8 @@ class config_service_t : public service_t
 {
 public:
     config_service_t(boost::asio::io_service& io_service, fs::path config_path)
-        : service_t{io_service}
-        , config_path_{std::move(config_path)} {}
+        : service_t{io_service}, config_path_{std::move(config_path)}
+    {}
 
     config_t& config() { return config_; }
 
@@ -69,9 +70,11 @@ void inventory_t::stop(boost::asio::io_service& io_service, std::function<void()
 inventory_t make_inventory(boost::asio::io_service& io_service, fs::path config_path)
 {
     auto config_service = std::make_unique<config_service_t>(io_service, config_path);
+    auto update_source_switch = std::make_unique<update_source_switch_t>(io_service, config_service->config());
 
     std::list<std::unique_ptr<service_t>> services;
     services.emplace_back(std::move(config_service));
+    services.emplace_back(std::move(update_source_switch));
 
     return inventory_t{std::move(services)};
 }
