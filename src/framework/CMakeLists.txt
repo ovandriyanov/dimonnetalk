@@ -14,6 +14,9 @@ endif()
 if(JSON_INCLUDE_PATH)
     include_directories("${JSON_INCLUDE_PATH}")
 endif()
+if(OPENSSL_INCLUDE_PATH)
+    include_directories("${OPENSSL_INCLUDE_PATH}")
+endif()
 
 add_library(framework
     inventory.cpp

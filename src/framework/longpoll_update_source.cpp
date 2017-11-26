@@ -18,12 +18,15 @@ using namespace boost::system;
 
 longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_service,
                                                    const longpoll_config_t& config,
-                                                   std::string api_token)
+                                                   std::string api_token,
+                                                   std::function<void(nlohmann::json)> update_callback)
     : io_service_{io_service}
     , config_{config}
     , api_token_{std::move(api_token)}
+    , update_callback_{std::move(update_callback)}
     , port_{0}
     , ssl_{std::make_unique<ssl_t>(io_service)}
+    , last_update_id_{0}
 {
 }
 
@@ -80,7 +83,7 @@ void longpoll_update_source_t::reload()
                     http::request<http::empty_body> request;
                     request.version(11);
                     request.method(http::verb::get);
-                    request.target("/bot" + api_token_ + "/getupdates");
+                    request.target("/bot" + api_token_ + "/getupdates?timeout=" + std::to_string(config_.poll_timeout));
                     request.set(http::field::host, host_);
                     request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
@@ -90,7 +93,7 @@ void longpoll_update_source_t::reload()
                                                 endpoint.address().to_string() + ':' + std::to_string(endpoint.port()) +
                                                 ": " + ec.message()};
                     }
-                    BOOST_LOG_TRIVIAL(debug) << "Wrote HTTP request: \n" << request;
+                    BOOST_LOG_TRIVIAL(trace) << "Wrote HTTP request: \n" << request;
 
                     http::response<http::string_body> response;
                     flat_buffer buffer;
@@ -100,12 +103,35 @@ void longpoll_update_source_t::reload()
                                                 endpoint.address().to_string() + ':' + std::to_string(endpoint.port()) +
                                                 ": " + ec.message()};
                     }
+                    BOOST_LOG_TRIVIAL(trace) << "Got HTTP response: \n" << response;
 
-                    BOOST_LOG_TRIVIAL(debug) << "Got HTTP response: \n" << response;
-                    throw std::runtime_error{"RETRY"};
+                    auto http_error = [](const std::string& what) {
+                        return std::runtime_error{"Cannot process HTTP response: " + what};
+                    };
+
+                    if(response.result() != http::status::ok)
+                        throw http_error("Server returned HTTP status " + std::to_string(static_cast<int>(response.result())));
+
+                    auto content_type = response["Content-Type"];
+                    if(content_type != "application/json")
+                        throw http_error("Invalid content type: " + std::string{content_type});
+
+                    try {
+                        auto updates = nlohmann::json::parse(response.body());
+                        for(auto& item : updates) {
+                            int update_id = item.at("update_id");
+                            if(last_update_id_ > update_id)
+                                continue;
+                            last_update_id_ = update_id;
+                            update_callback_(std::move(updates));
+                        }
+                    } catch(const nlohmann::json::exception& ex) {
+                        throw http_error(ex.what());
+                    }
                 }
             } catch(const std::runtime_error& ex) {
                 BOOST_LOG_TRIVIAL(info) << ex.what();
+                ssl_ = std::make_unique<ssl_t>(io_service_);
                 boost::asio::steady_timer timer{io_service_};
                 timer.expires_from_now(std::chrono::seconds{config_.retry_timeout});
                 util::async_wait(timer, *this, yield, resume_);

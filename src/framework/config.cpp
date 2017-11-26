@@ -36,6 +36,7 @@ config_t load_config(const fs::path& path)
         longpoll_config.host = update_source_json.at("host");
         longpoll_config.port = update_source_json.at("port");
         longpoll_config.retry_timeout = update_source_json.at("retry_timeout");
+        longpoll_config.poll_timeout = update_source_json.at("poll_timeout");
         config.update_source = std::move(longpoll_config);
     } else {
         throw load_error("Invalid update source type: " + update_source_type);

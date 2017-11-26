@@ -22,13 +22,13 @@ file_chunk_range_t::file_chunk_range_t(const boost::filesystem::path& path)
     if(!is) throw system_error{error_code{errno, system_category()}, "Cannot open " + path.string()};
 
     char buf[BUFSIZ];
-    while(is.read(buf, sizeof(buf)))
-        yield(boost::asio::buffer(buf, is.gcount()));
+    do {
+        is.read(buf, sizeof(buf));
+        if(is.gcount())
+            yield(boost::asio::buffer(buf, is.gcount()));
+    } while(is);
 
     if(is.bad()) throw system_error{error_code(errno, system_category()), "Cannot read " + path.string()};
-
-    if(is.gcount())
-        yield(boost::asio::buffer(buf, is.gcount()));
 }}
 {
 }
