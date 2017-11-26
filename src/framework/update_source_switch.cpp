@@ -35,7 +35,7 @@ void update_source_switch_t::reload()
                 for(const auto& bot_config : source_switch_.config_.bots) {
                     sources.emplace_back(std::make_unique<longpoll_update_source_t>(
                         source_switch_.io_service_, cfg, bot_config.api_token,
-                        [](nlohmann::json update) { BOOST_LOG_TRIVIAL(debug) << "Got update: " << update.dump(); }));
+                        [](nlohmann::json update) { BOOST_LOG_TRIVIAL(debug) << "Got update: \n" << update.dump(4, ' '); }));
                 }
                 source_switch_.update_source_ = std::move(sources);
             }
@@ -106,7 +106,7 @@ void update_source_switch_t::stop(update_source_t& variant_source)
 
         void operator()(longpoll_update_sources_t& longpoll_sources)
         {
-            if(longpoll_sources.empty()) {
+            if(longpoll_sources.size()) {
                 auto sources = std::move(longpoll_sources);
                 longpoll_sources.clear();
                 source_switch_.stop(sources);
@@ -118,7 +118,7 @@ void update_source_switch_t::stop(update_source_t& variant_source)
         update_source_switch_t& source_switch_;
     } visitor(*this);
 
-    boost::apply_visitor(visitor, *update_source_);
+    boost::apply_visitor(visitor, variant_source);
 }
 
 } // namespace framework

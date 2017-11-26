@@ -62,7 +62,7 @@ void inventory_t::stop(boost::asio::io_service& io_service, std::function<void()
             s->stop([&]() { (*stop_coro_)(); });
         for(int i = services_.size(); i; --i)
             yield();
-        services_.clear();
+        // services_.clear();
         io_service.post(std::move(cb));
     });
 }

@@ -25,7 +25,6 @@ longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_s
     , api_token_{std::move(api_token)}
     , update_callback_{std::move(update_callback)}
     , port_{0}
-    , ssl_{std::make_unique<ssl_t>(io_service)}
     , last_update_id_{0}
 {
 }
@@ -37,12 +36,12 @@ void longpoll_update_source_t::reload()
     host_ = config_.host;
     port_ = config_.port;
 
-    resume_ = std::make_unique<coro_t::pull_type>([&](coro_t::push_type& yield) {
+    session_ = std::make_unique<session_t>(io_service_, [&](coro_t::push_type& yield) {
         while(true) {
             try {
                 BOOST_LOG_TRIVIAL(debug) << "Resolving " << host_;
                 boost::asio::ip::tcp::resolver resolver{io_service_};
-                auto resolve_result = util::async_resolve(resolver, host_, port_, *this, yield, resume_);
+                auto resolve_result = util::async_resolve(resolver, host_, port_, *this, yield, session_->resume);
                 if(auto* ec = boost::get<error_code>(&resolve_result))
                     throw system_error{*ec, "Cannot resolve host name " + host_};
 
@@ -117,19 +116,27 @@ void longpoll_update_source_t::reload()
                         throw http_error("Invalid content type: " + std::string{content_type});
 
                     try {
-                        auto updates = nlohmann::json::parse(response.body());
-                        for(auto& item : updates) {
+                        auto response_json = nlohmann::json::parse(response.body());
+                        if(response_json.at("ok") != true)
+                            throw http_error("Field 'ok' is not 'True'");
+                        for(auto& item : response_json.at("result")) {
                             int update_id = item.at("update_id");
                             if(last_update_id_ > update_id)
                                 continue;
                             last_update_id_ = update_id;
-                            update_callback_(std::move(updates));
+                            update_callback_(std::move(item));
                         }
                     } catch(const nlohmann::json::exception& ex) {
                         throw http_error(ex.what());
                     }
                 }
             } catch(const std::runtime_error& ex) {
+                if(stop_callback_) {
+                    // TODO: shutdown gracefully
+                    ssl_ = nullptr;
+                    return io_service_.post(std::move(stop_callback_));
+                }
+
                 BOOST_LOG_TRIVIAL(info) << ex.what();
                 ssl_ = std::make_unique<ssl_t>(io_service_);
                 boost::asio::steady_timer timer{io_service_};
@@ -142,10 +149,10 @@ void longpoll_update_source_t::reload()
 
 void longpoll_update_source_t::stop(std::function<void()> cb)
 {
-    ssl_ = nullptr;
-    resume_ = nullptr;
-    cancel_callbacks();
-    io_service_.post(std::move(cb));
+    stop_callback_ = std::move(cb);
+
+    ssl_->stream.next_layer().cancel();
+    timer_.cancel();
 }
 
 } // namespace framework

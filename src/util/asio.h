@@ -19,54 +19,46 @@
 #include <boost/coroutine2/all.hpp>
 #include <boost/variant.hpp>
 
-#include "util/callback_wrapper.h"
-
 namespace util {
 
-template <typename CoroutinePtr>
 boost::variant<boost::system::error_code, int>
 async_wait(boost::asio::signal_set& sigset,
-           util::callback_wrapper_t& callback_wrapper,
            boost::coroutines2::coroutine<void>::push_type& yield,
-           CoroutinePtr& resume)
+           boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
     int signo;
 
-    sigset.async_wait(callback_wrapper.wrap([&](boost::system::error_code _ec, int _signo) {
+    sigset.async_wait([&](boost::system::error_code _ec, int _signo) {
         ec = _ec;
         signo = _signo;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     if(ec) return ec;
     return signo;
 }
 
-template <typename CoroutinePtr>
 boost::system::error_code
 async_wait(boost::asio::steady_timer& timer,
-           util::callback_wrapper_t& callback_wrapper,
            boost::coroutines2::coroutine<void>::push_type& yield,
-           CoroutinePtr& resume)
+           boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
 
-    timer.async_wait(callback_wrapper.wrap([&](boost::system::error_code _ec) {
+    timer.async_wait([&](boost::system::error_code _ec) {
         ec = _ec;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     return ec;
 }
 
-template <typename CoroutinePtr>
 boost::system::error_code
 async_connect(boost::asio::ip::tcp::socket& socket,
               const boost::asio::ip::tcp::endpoint& endpoint,
-              util::callback_wrapper_t& callback_wrapper,
               boost::coroutines2::coroutine<void>::push_type& yield,
               CoroutinePtr& resume)
 {

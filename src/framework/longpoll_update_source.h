@@ -12,6 +12,8 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <boost/beast.hpp>
 #include <boost/coroutine2/all.hpp>
 
 #include <nlohmann/json.hpp>
@@ -36,16 +38,21 @@ public:
 
 private:
     using coro_t = boost::coroutines2::coroutine<void>;
-    struct ssl_t {
-        ssl_t(boost::asio::io_service& io_service)
-            : context{boost::asio::ssl::context::sslv23_client}, stream{io_service, context} {}
+    struct session_t {
+        template <typename F>
+        session_t(boost::asio::io_service& io_service, F&& f)
+            : context{boost::asio::ssl::context::sslv23_client}
+            , stream{io_service, context}
+            , timer(io_service)
+            , stop{false}
+            , resume{std::forward<F>(f)}
+        {}
 
         boost::asio::ssl::context context;
         boost::asio::ssl::stream<boost::asio::ip::tcp::socket> stream;
-    };
-    struct finishing_t {
-        ssl_t ssl;
-        std::unique_ptr<coro_t::pull_type> resume;
+        boost::asio::steady_timer timer;
+        bool stop;
+        coro_t::pull_type resume;
     };
 
 private:
@@ -57,10 +64,10 @@ private:
     std::string host_;
     uint16_t port_;
 
-    std::unique_ptr<ssl_t> ssl_;
-    std::unique_ptr<coro_t::pull_type> resume_;
-    std::list<std::unique_ptr<finishing_t>> finishing_;
+    std::unique_ptr<session_t> session_;
     int last_update_id_;
+    std::function<void()> stop_callback_;
+    std::list<std::unique_ptr<session_t>> finishing_;
 };
 
 } // namespace framework
