@@ -1,4 +1,10 @@
 {
+    "update_source": {
+        "type": "longpoll",
+        "host": "api.telegram.org",
+        "port": 443,
+        "retry_timeout": 5
+    },
     "bots": [
         {
             "name": "dimonnetalk",

@@ -30,7 +30,7 @@ int main() try
     boost::asio::signal_set sigset_hup{io_service};
     if(sigset_hup.add(SIGHUP, ec)) throw system_error{ec, "signal"};
 
-    auto inventory = fw::make_inventory("config.json");
+    auto inventory = fw::make_inventory(io_service, "config.json");
     inventory.reload();
 
     util::callback_wrapper_t callback_wrapper;
