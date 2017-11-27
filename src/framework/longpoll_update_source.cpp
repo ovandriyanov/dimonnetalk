@@ -17,11 +17,13 @@ namespace framework {
 using namespace boost::system;
 
 longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_service,
-                                                   const longpoll_config_t& config,
+                                                   const longpoll_config_t& longpoll_config,
+                                                   const api_server_config_t& api_server_config,
                                                    std::string api_token,
                                                    std::function<void(nlohmann::json)> update_callback)
     : io_service_{io_service}
-    , config_{config}
+    , longpoll_config_{longpoll_config}
+    , api_server_config_{api_server_config}
     , api_token_{std::move(api_token)}
     , update_callback_{std::move(update_callback)}
     , port_{0}
@@ -65,47 +67,7 @@ longpoll_update_source_t::coroutine_t::coroutine_t(longpoll_update_source_t& lon
     yield();
     while(true) {
         try {
-            BOOST_LOG_TRIVIAL(debug) << "Resolving " << longpoll_.host_;
-            boost::asio::ip::tcp::resolver resolver{longpoll_.io_service_};
-            auto resolve_result = util::async_resolve(make_shared(resolver), longpoll_.host_, longpoll_.port_, yield, resume);
-            if(stop) return;
-            if(auto* ec = boost::get<error_code>(&resolve_result))
-                throw system_error{*ec, "Cannot resolve host name " + longpoll_.host_};
-
-            auto& socket = ssl_stream.next_layer();
-            error_code ec;
-            boost::asio::ip::tcp::endpoint endpoint;
-            for(const auto& result : boost::get<boost::asio::ip::tcp::resolver::results_type>(resolve_result)) {
-                if(socket.open(result.endpoint().protocol(), ec)) {
-                    BOOST_LOG_TRIVIAL(debug) << "Cannot open socket for endpoint " << result.endpoint() << ": " << ec.message();
-                    continue;
-                }
-                BOOST_LOG_TRIVIAL(debug) << "Connecting to " << result.endpoint();
-                ec = util::async_connect(make_shared(socket), result.endpoint(), yield, resume);
-                if(stop) return;
-                if(ec) {
-                    BOOST_LOG_TRIVIAL(debug) << "Cannot connect to " << result.endpoint() << ": " << ec.message();
-                    continue;
-                } else {
-                    endpoint = result.endpoint();
-                    BOOST_LOG_TRIVIAL(debug) << "Connected to " << endpoint << "; performing SSL handshake";
-                    break;
-                }
-            }
-            if(!socket.is_open()) {
-                throw std::runtime_error{"Cannot connect to " + longpoll_.host_ + ':' + std::to_string(longpoll_.port_) +
-                                         ": no more endpoints to try"};
-            }
-
-            using handshake_type = boost::asio::ssl::stream_base::handshake_type;
-            ec = util::async_handshake(make_shared(ssl_stream), handshake_type::client, yield, resume);
-            if(stop) return;
-            if(ec) {
-                throw system_error{ec, "Cannot connect to " + longpoll_.host_ + ':' + std::to_string(longpoll_.port_) +
-                                       ": SSL handshake: " + ec.message()};
-            }
-
-            BOOST_LOG_TRIVIAL(debug) << "SSL handshake with " << endpoint << " complete";
+            auto ep = server_connector.connect(config_)
             while(true) {
                 using namespace boost::beast;
                 http::request<http::empty_body> request;

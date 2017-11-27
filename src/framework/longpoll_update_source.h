@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 #include "framework/config.h"
+#include "framework/server_connector.h"
 
 namespace framework {
 
@@ -26,7 +27,8 @@ class longpoll_update_source_t
 {
 public:
     longpoll_update_source_t(boost::asio::io_service& io_service,
-                             const longpoll_config_t& config,
+                             const longpoll_config_t& longpoll_config,
+                             const api_server_config_t& api_server_config,
                              std::string api_token,
                              std::function<void(nlohmann::json)> update_callback);
 
@@ -49,6 +51,7 @@ private:
         longpoll_update_source_t& longpoll_;
         boost::asio::ssl::context ssl_context;
         boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_stream;
+        server_connector_t server_connector;
         boost::asio::steady_timer timer;
         bool stop;
         coro_t::pull_type resume;
@@ -59,7 +62,9 @@ private:
 
 private:
     boost::asio::io_service& io_service_;
-    const longpoll_config_t& config_;
+    const longpoll_config_t& longpoll_config_;
+    const api_server_config_t& api_server_config_;
+
     const std::string api_token_;
     std::function<void(nlohmann::json)> update_callback_;
 

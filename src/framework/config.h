@@ -17,10 +17,14 @@
 
 namespace framework {
 
-struct longpoll_config_t
+struct api_server_config_t
 {
     std::string host;
     uint16_t port;
+};
+
+struct longpoll_config_t
+{
     int retry_timeout;
     int poll_timeout;
 };
