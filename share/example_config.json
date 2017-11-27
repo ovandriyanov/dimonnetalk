@@ -1,8 +1,10 @@
 {
+    "api_server": {
+        "host": "api.telegram.org",
+        "port": 443
+    },
     "update_source": {
         "type": "longpoll",
-        "host": "api.telegram.org",
-        "port": 443,
         "retry_timeout": 5,
         "poll_timeout": 30
     },

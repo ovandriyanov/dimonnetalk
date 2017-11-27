@@ -22,8 +22,8 @@ server_connector_t::server_connector_t(ssl_stream_t& ssl_stream)
 {
 }
 
-std::exception_ptr server_connector_t::connect(const std::string& host, uint16_t port,
-                                               coro_t::push_type& yield, coro_t::pull_type& resume)
+boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
+server_connector_t::connect(const std::string& host, uint16_t port, coro_t::push_type& yield, coro_t::pull_type& resume)
 {
     stop_ = false;
     BOOST_LOG_TRIVIAL(debug) << "Resolving " << host;
@@ -65,7 +65,7 @@ std::exception_ptr server_connector_t::connect(const std::string& host, uint16_t
                                        ": SSL handshake: " + ec.message()});
     }
     BOOST_LOG_TRIVIAL(debug) << "SSL handshake with " << endpoint << " complete";
-    return nullptr;
+    return endpoint;
 }
 
 void server_connector_t::cancel()

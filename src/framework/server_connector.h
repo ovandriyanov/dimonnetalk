@@ -13,6 +13,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/coroutine2/all.hpp>
+#include <boost/variant.hpp>
 
 namespace framework {
 
@@ -25,7 +26,8 @@ public:
 public:
     server_connector_t(ssl_stream_t& ssl_stream);
 
-    std::exception_ptr connect(const std::string& host, uint16_t port, coro_t::push_type& yield, coro_t::pull_type& resume);
+    boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
+        connect(const std::string& host, uint16_t port, coro_t::push_type& yield, coro_t::pull_type& resume);
     void cancel();
 
 private:

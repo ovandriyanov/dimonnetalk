@@ -33,10 +33,10 @@ longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_s
 
 void longpoll_update_source_t::reload()
 {
-    assert(config_.host.size());
-    if(config_.host == host_ || config_.port == port_) return;
-    host_ = config_.host;
-    port_ = config_.port;
+    assert(api_server_config_.host.size());
+    if(api_server_config_.host == host_ || api_server_config_.port == port_) return;
+    host_ = api_server_config_.host;
+    port_ = api_server_config_.port;
 
     if(coroutine_) stop(*coroutine_);
     coroutine_ = std::make_shared<coroutine_t>(*this);
@@ -57,9 +57,10 @@ void longpoll_update_source_t::stop(coroutine_t& coro)
 }
 
 longpoll_update_source_t::coroutine_t::coroutine_t(longpoll_update_source_t& longpoll)
-    : longpoll_{longpoll}
+    : longpoll{longpoll}
     , ssl_context{boost::asio::ssl::context::sslv23_client}
     , ssl_stream{longpoll.io_service_, ssl_context}
+    , server_connector{ssl_stream}
     , timer(longpoll.io_service_)
     , stop{false}
     , resume{[&](coro_t::push_type& yield)
@@ -67,17 +68,24 @@ longpoll_update_source_t::coroutine_t::coroutine_t(longpoll_update_source_t& lon
     yield();
     while(true) {
         try {
-            auto ep = server_connector.connect(config_)
+            auto host = longpoll.host_;
+            auto port = longpoll.port_;
+            auto connect_result = server_connector.connect(host, port, yield, resume);
+            if(stop) return;
+            if(auto* ep = boost::get<std::exception_ptr>(&connect_result))
+                std::rethrow_exception(*ep);
+            const auto endpoint = boost::get<boost::asio::ip::tcp::endpoint>(connect_result);
+
             while(true) {
                 using namespace boost::beast;
                 http::request<http::empty_body> request;
                 request.version(11);
                 request.method(http::verb::get);
-                request.target("/bot" + longpoll_.api_token_ +
+                request.target("/bot" + longpoll.api_token_ +
                                "/getupdates"
-                               "?timeout=" + std::to_string(longpoll_.config_.poll_timeout) +
-                               "&offset=" + std::to_string(longpoll_.last_update_id_ + 1));
-                request.set(http::field::host, longpoll_.host_);
+                               "?timeout=" + std::to_string(longpoll.longpoll_config_.poll_timeout) +
+                               "&offset=" + std::to_string(longpoll.last_update_id_ + 1));
+                request.set(http::field::host, host);
                 request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
                 auto result = util::async_write(make_shared(ssl_stream), request, yield, resume);
@@ -117,10 +125,10 @@ longpoll_update_source_t::coroutine_t::coroutine_t(longpoll_update_source_t& lon
                         throw http_error("Field 'ok' is not 'True'");
                     for(auto& item : response_json.at("result")) {
                         int update_id = item.at("update_id");
-                        if(longpoll_.last_update_id_ > update_id)
+                        if(longpoll.last_update_id_ > update_id)
                             continue;
-                        longpoll_.last_update_id_ = update_id;
-                        longpoll_.update_callback_(std::move(item));
+                        longpoll.last_update_id_ = update_id;
+                        longpoll.update_callback_(std::move(item));
                     }
                 } catch(const nlohmann::json::exception& ex) {
                     throw http_error(ex.what());
@@ -130,7 +138,7 @@ longpoll_update_source_t::coroutine_t::coroutine_t(longpoll_update_source_t& lon
             BOOST_LOG_TRIVIAL(info) << ex.what();
             if(ssl_stream.next_layer().is_open())
                 ssl_stream.next_layer().close(); // TODO: shutdown gracefully
-            timer.expires_from_now(std::chrono::seconds{longpoll_.config_.retry_timeout});
+            timer.expires_from_now(std::chrono::seconds{longpoll.longpoll_config_.retry_timeout});
             auto ec = util::async_wait_timer(make_shared(timer), yield, resume);
             if(stop) return;
             if(ec) throw system_error{ec, "timer"};

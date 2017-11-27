@@ -29,12 +29,14 @@ config_t load_config(const fs::path& path)
 
     config_t config;
 
+    auto& api_server_json = json_config.at("api_server");
+    config.api_server.host = api_server_json.at("host");
+    config.api_server.port = api_server_json.at("port");
+
     auto& update_source_json = json_config.at("update_source");
     std::string update_source_type = update_source_json.at("type");
     if(update_source_type == "longpoll") {
         longpoll_config_t longpoll_config;
-        longpoll_config.host = update_source_json.at("host");
-        longpoll_config.port = update_source_json.at("port");
         longpoll_config.retry_timeout = update_source_json.at("retry_timeout");
         longpoll_config.poll_timeout = update_source_json.at("poll_timeout");
         config.update_source = std::move(longpoll_config);

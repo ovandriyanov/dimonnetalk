@@ -48,7 +48,7 @@ private:
         std::shared_ptr<T> make_shared(T& field) { return std::shared_ptr<T>(shared_from_this(), &field); }
 
     public:
-        longpoll_update_source_t& longpoll_;
+        longpoll_update_source_t& longpoll;
         boost::asio::ssl::context ssl_context;
         boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_stream;
         server_connector_t server_connector;
