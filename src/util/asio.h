@@ -21,15 +21,16 @@
 
 namespace util {
 
+template <typename SignalSetPtr>
 boost::variant<boost::system::error_code, int>
-async_wait(boost::asio::signal_set& sigset,
-           boost::coroutines2::coroutine<void>::push_type& yield,
-           boost::coroutines2::coroutine<void>::pull_type& resume)
+async_wait_signal(SignalSetPtr sigset,
+                  boost::coroutines2::coroutine<void>::push_type& yield,
+                  boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
     int signo;
 
-    sigset.async_wait([&](boost::system::error_code _ec, int _signo) {
+    sigset->async_wait([&, sigset](boost::system::error_code _ec, int _signo) {
         ec = _ec;
         signo = _signo;
         resume();
@@ -40,14 +41,15 @@ async_wait(boost::asio::signal_set& sigset,
     return signo;
 }
 
+template <typename TimerPtr>
 boost::system::error_code
-async_wait(boost::asio::steady_timer& timer,
-           boost::coroutines2::coroutine<void>::push_type& yield,
-           boost::coroutines2::coroutine<void>::pull_type& resume)
+async_wait_timer(TimerPtr timer,
+                 boost::coroutines2::coroutine<void>::push_type& yield,
+                 boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
 
-    timer.async_wait([&](boost::system::error_code _ec) {
+    timer->async_wait([&, timer](boost::system::error_code _ec) {
         ec = _ec;
         resume();
     });
@@ -56,110 +58,101 @@ async_wait(boost::asio::steady_timer& timer,
     return ec;
 }
 
+template <typename SocketPtr>
 boost::system::error_code
-async_connect(boost::asio::ip::tcp::socket& socket,
+async_connect(SocketPtr socket,
               const boost::asio::ip::tcp::endpoint& endpoint,
               boost::coroutines2::coroutine<void>::push_type& yield,
-              CoroutinePtr& resume)
+              boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
 
-    socket.async_connect(endpoint, callback_wrapper.wrap([&](boost::system::error_code _ec) {
+    socket->async_connect(endpoint, [&, socket](boost::system::error_code _ec) {
         ec = _ec;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     return ec;
 }
 
-template <typename CoroutinePtr>
+template <typename SslStreamPtr>
 boost::system::error_code
-async_handshake(boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& ssl_stream,
+async_handshake(SslStreamPtr ssl_stream,
                 boost::asio::ssl::stream_base::handshake_type handshake_type,
-                util::callback_wrapper_t& callback_wrapper,
                 boost::coroutines2::coroutine<void>::push_type& yield,
-                CoroutinePtr& resume)
+                boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
 
-    ssl_stream.async_handshake(handshake_type, callback_wrapper.wrap([&](boost::system::error_code _ec) {
+    ssl_stream->async_handshake(handshake_type, [&, ssl_stream](boost::system::error_code _ec) {
         ec = _ec;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     return ec;
 }
 
-template <typename CoroutinePtr>
+template <typename ResolverPtr>
 boost::variant<boost::system::error_code, boost::asio::ip::tcp::resolver::results_type>
-async_resolve(boost::asio::ip::tcp::resolver& resolver,
+async_resolve(ResolverPtr resolver,
               const std::string& host_name,
               uint16_t port,
-              util::callback_wrapper_t& callback_wrapper,
               boost::coroutines2::coroutine<void>::push_type& yield,
-              CoroutinePtr& resume)
+              boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     using result_t = boost::asio::ip::tcp::resolver::results_type;
     boost::system::error_code ec;
     result_t resolver_result;
 
-    resolver.async_resolve(host_name, std::to_string(port), callback_wrapper.wrap(
-        [&](boost::system::error_code _ec, result_t result_)
-    {
+    resolver->async_resolve(host_name, std::to_string(port), [&, resolver](boost::system::error_code _ec, result_t result_) {
         ec = _ec;
         resolver_result = std::move(result_);
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     if(ec) return ec;
     return resolver_result;
 }
 
-template <typename Stream, typename Request, typename CoroutinePtr>
+template <typename StreamPtr, typename Request>
 std::tuple<boost::system::error_code, size_t>
-async_write(Stream& stream,
+async_write(StreamPtr stream,
             Request& request,
-            util::callback_wrapper_t& callback_wrapper,
             boost::coroutines2::coroutine<void>::push_type& yield,
-            CoroutinePtr& resume)
+            boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
     size_t transferred;
 
-    boost::beast::http::async_write(stream, request, callback_wrapper.wrap(
-        [&](boost::system::error_code _ec, size_t _transferred)
-    {
+    boost::beast::http::async_write(*stream, request, [&, stream](boost::system::error_code _ec, size_t _transferred) {
         ec = _ec;
         transferred = _transferred;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     return std::make_tuple(ec, transferred);
 }
 
-template <typename Stream, typename Buffer, typename Response, typename CoroutinePtr>
+template <typename StreamPtr, typename Buffer, typename Response>
 std::tuple<boost::system::error_code, size_t>
-async_read(Stream& stream,
+async_read(StreamPtr stream,
            Buffer& buffer,
            Response& response,
-           util::callback_wrapper_t& callback_wrapper,
            boost::coroutines2::coroutine<void>::push_type& yield,
-           CoroutinePtr& resume)
+           boost::coroutines2::coroutine<void>::pull_type& resume)
 {
     boost::system::error_code ec;
     size_t transferred;
 
-    boost::beast::http::async_read(stream, buffer, response, callback_wrapper.wrap(
-        [&](boost::system::error_code _ec, size_t _transferred)
-    {
+    boost::beast::http::async_read(*stream, buffer, response, [&, stream](boost::system::error_code _ec, size_t _transferred) {
         ec = _ec;
         transferred = _transferred;
-        (*resume)();
-    }));
+        resume();
+    });
     yield();
 
     return std::make_tuple(ec, transferred);

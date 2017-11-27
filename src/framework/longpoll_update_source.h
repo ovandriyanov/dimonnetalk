@@ -19,11 +19,10 @@
 #include <nlohmann/json.hpp>
 
 #include "framework/config.h"
-#include "util/callback_wrapper.h"
 
 namespace framework {
 
-class longpoll_update_source_t : private util::callback_wrapper_t
+class longpoll_update_source_t
 {
 public:
     longpoll_update_source_t(boost::asio::io_service& io_service,
@@ -38,22 +37,25 @@ public:
 
 private:
     using coro_t = boost::coroutines2::coroutine<void>;
-    struct session_t {
-        template <typename F>
-        session_t(boost::asio::io_service& io_service, F&& f)
-            : context{boost::asio::ssl::context::sslv23_client}
-            , stream{io_service, context}
-            , timer(io_service)
-            , stop{false}
-            , resume{std::forward<F>(f)}
-        {}
+    class coroutine_t : public std::enable_shared_from_this<coroutine_t>
+    {
+    public:
+        coroutine_t(longpoll_update_source_t& longpoll);
 
-        boost::asio::ssl::context context;
-        boost::asio::ssl::stream<boost::asio::ip::tcp::socket> stream;
+        template <typename T>
+        std::shared_ptr<T> make_shared(T& field) { return std::shared_ptr<T>(shared_from_this(), &field); }
+
+    public:
+        longpoll_update_source_t& longpoll_;
+        boost::asio::ssl::context ssl_context;
+        boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_stream;
         boost::asio::steady_timer timer;
         bool stop;
         coro_t::pull_type resume;
     };
+
+private:
+    void stop(coroutine_t& coro);
 
 private:
     boost::asio::io_service& io_service_;
@@ -64,10 +66,8 @@ private:
     std::string host_;
     uint16_t port_;
 
-    std::unique_ptr<session_t> session_;
+    std::shared_ptr<coroutine_t> coroutine_;
     int last_update_id_;
-    std::function<void()> stop_callback_;
-    std::list<std::unique_ptr<session_t>> finishing_;
 };
 
 } // namespace framework

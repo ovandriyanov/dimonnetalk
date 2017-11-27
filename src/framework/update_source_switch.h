@@ -9,7 +9,7 @@
 #ifndef FRAMEWORK_UPDATE_SOURCE_SWITCH_H
 #define FRAMEWORK_UPDATE_SOURCE_SWITCH_H
 
-#include <boost/optional.hpp>
+#include <memory>
 
 #include "framework/config.h"
 #include "framework/longpoll_update_source.h"
@@ -27,7 +27,7 @@ public: // service_t
     void stop(std::function<void()> cb) final;
 
 private:
-    using longpoll_update_sources_t = std::list<std::unique_ptr<longpoll_update_source_t>>;
+    using longpoll_update_sources_t = std::list<std::shared_ptr<longpoll_update_source_t>>;
     using update_source_t = boost::variant<longpoll_update_sources_t>;
 
     void stop(longpoll_update_sources_t& longpoll_sources);
@@ -36,9 +36,7 @@ private:
 private:
     const config_t& config_;
 
-    boost::optional<update_source_t> update_source_;
-    std::list<update_source_t> stopping_;
-    std::function<void()> stop_cb_;
+    std::shared_ptr<update_source_t> update_source_;
 };
 
 } // namespace framework
