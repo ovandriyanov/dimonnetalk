@@ -36,7 +36,7 @@ void update_source_switch_t::reload()
                 longpoll_update_sources_t sources;
                 for(const auto& bot_config : source_switch_.config_.bots) {
                     sources.emplace_back(std::make_shared<longpoll_update_source_t>(
-                        source_switch_.io_service_, cfg, bot_config.api_token,
+                        source_switch_.io_service_, cfg, source_switch_.config_.api_server, bot_config.api_token,
                         [](nlohmann::json update) { BOOST_LOG_TRIVIAL(debug) << "Got update: \n" << update.dump(4, ' '); }));
                 }
                 source_switch_.update_source_ = std::make_shared<update_source_t>(std::move(sources));
