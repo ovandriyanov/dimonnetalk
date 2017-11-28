@@ -19,6 +19,7 @@ if(OPENSSL_INCLUDE_PATH)
 endif()
 
 add_library(framework
+    api_server.cpp
     config.cpp
     inventory.cpp
     longpoll_update_source.cpp

@@ -17,7 +17,13 @@ namespace framework {
 update_source_switch_t::update_source_switch_t(boost::asio::io_service& io_service, const config_t& config)
     : service_t{io_service}
     , config_{config}
+    , api_server_{nullptr}
 {
+}
+
+void update_source_switch_t::init(api_server_t* api_server)
+{
+    api_server_ = api_server;
 }
 
 // service_t
@@ -37,7 +43,7 @@ void update_source_switch_t::reload()
                 for(const auto& bot_config : source_switch_.config_.bots) {
                     sources.emplace_back(std::make_shared<longpoll_update_source_t>(
                         source_switch_.io_service_, cfg, source_switch_.config_.api_server, bot_config.api_token,
-                        [](nlohmann::json update) { BOOST_LOG_TRIVIAL(debug) << "Got update: \n" << update.dump(4, ' '); }));
+                        std::bind(&update_source_switch_t::handle_update, &source_switch_, bot_config.api_token, std::placeholders::_1)));
                 }
                 source_switch_.update_source_ = std::make_shared<update_source_t>(std::move(sources));
             }
@@ -81,6 +87,33 @@ void update_source_switch_t::stop(longpoll_update_sources_t& longpoll_sources)
 {
     for(auto& longpoll : longpoll_sources)
         longpoll->stop([longpoll](){});
+}
+
+void update_source_switch_t::handle_update(std::string api_token, nlohmann::json update_json)
+{
+    try {
+        if(update_json.at("message").at("chat").at("id") != 165888502)
+            return;
+        ;
+        api_server_->call_api(api_token, "sendMessage", nlohmann::json{{"chat_id", 165888502}, {"text", "hello, world"}},
+            [](std::exception_ptr ep, nlohmann::json response)
+        {
+            if(ep) {
+                std::string what;
+                try {
+                    std::rethrow_exception(ep);
+                } catch(const std::exception& ex) {
+                    what = ex.what();
+                }
+                BOOST_LOG_TRIVIAL(debug) << "Cannot send message: " << what;
+                return;
+            }
+
+            BOOST_LOG_TRIVIAL(debug) << "Sent message";
+        });
+    } catch(const nlohmann::json::exception& ex) {
+        BOOST_LOG_TRIVIAL(debug) << "Cannot handle update: " << ex.what();
+    }
 }
 
 void update_source_switch_t::stop(update_source_t& variant_source)

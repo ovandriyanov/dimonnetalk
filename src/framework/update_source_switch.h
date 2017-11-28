@@ -11,6 +11,7 @@
 
 #include <memory>
 
+#include "framework/api_server.h"
 #include "framework/config.h"
 #include "framework/longpoll_update_source.h"
 #include "framework/service.h"
@@ -21,6 +22,8 @@ class update_source_switch_t : public service_t
 {
 public:
     update_source_switch_t(boost::asio::io_service& io_service, const config_t& config);
+
+    void init(api_server_t* api_server);
 
 public: // service_t
     void reload() final;
@@ -33,8 +36,11 @@ private:
     void stop(longpoll_update_sources_t& longpoll_sources);
     void stop(update_source_t& variant_source);
 
+    void handle_update(std::string api_token, nlohmann::json update_json);
+
 private:
     const config_t& config_;
+    api_server_t* api_server_;
 
     std::shared_ptr<update_source_t> update_source_;
 };

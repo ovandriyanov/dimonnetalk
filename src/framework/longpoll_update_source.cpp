@@ -33,8 +33,11 @@ longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_s
 
 void longpoll_update_source_t::reload()
 {
-    assert(api_server_config_.host.size());
-    if(api_server_config_.host == host_ || api_server_config_.port == port_) return;
+    if(coroutine_) {
+        if(api_server_config_.host == host_ || api_server_config_.port == port_)
+            return;
+    }
+
     host_ = api_server_config_.host;
     port_ = api_server_config_.port;
 
