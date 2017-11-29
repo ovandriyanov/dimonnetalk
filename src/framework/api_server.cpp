@@ -18,31 +18,66 @@ api_server_t::api_server_t(boost::asio::io_service& io_service,
                            const api_server_config_t& api_server_config)
     : service_t{io_service}
     , api_server_config_{api_server_config}
+    , ssl_context_{boost::asio::ssl::context::sslv23_client}
+    , ssl_stream_{std::make_shared<ssl_stream_t>(io_service, ssl_context_)}
+    , server_connector_{io_service}
     , port_{0}
 {
 }
 
-void api_server_t::call_api(std::string api_token, std::string call, nlohmann::json request, cb_t callback)
+void api_server_t::call_api(request_t request)
 {
-    coroutine_->requests.emplace_back(request_t{std::move(api_token), std::move(call), std::move(request), std::move(callback)});
-    if(coroutine_->requests.size() == 1)
-        coroutine_->resume();
+    requests_.emplace_back(std::move(request));
+    if(resume_ && requests_.size() == 1)
+        (*resume_)();
 }
 
 void api_server_t::reload()
 {
-    if(coroutine_) {
+    if(resume_) {
         if(api_server_config_.host == host_ && api_server_config_.port == port_)
             return;
     }
 
-    std::list<request_t> unhandled_requests;
-    if(coroutine_) {
-        unhandled_requests = std::move(coroutine_->requests);
-        stop(*coroutine_);
-    }
+    std::list<request_t> unhandled_requests = std::move(requests_);
+    if(resume_)
+        stop();
 
-    coroutine_ = std::make_shared<coroutine_t>(*this, std::move(unhandled_requests));
+    resume_ = std::make_unique<util::push_coro_t>(
+        [&](coro_t::pull_type& yield)
+    {
+        while(true) {
+            if(requests_.empty()) yield();
+
+            assert(requests_.size());
+            auto req = std::move(requests_.front());
+            std::pair<std::exception_ptr, nlohmann::json> api_call_res;
+
+            while(true) {
+                if(!ssl_stream_->next_layer().is_open()) {
+                    auto connect_res = server_connector_.connect(api_server.host_, api_server.port_, yield, resume);
+                    if(auto* ep = boost::get<std::exception_ptr>(&connect_res)) {
+                        api_call_res.first = *ep;
+                    } else {
+                        api_call_res = do_api_call(req.call, req.api_token, req.request, yield, resume);
+                        if(stop) return;
+                    }
+                    break;
+                } else {
+                    api_call_res = do_api_call(req.call, req.api_token, req.request, yield, resume);
+                    if(stop) return;
+                    if(!api_call_res.first) break;
+
+                    // Server probably closed previous connection due to timeout
+                    // Reconnect and retry API call
+                    ssl_stream.next_layer().close();
+                }
+            }
+
+            req.callback(api_call_res.first, api_call_res.second);
+            requests.pop_front();
+        }
+    });
     coroutine_->resume();
 }
 
@@ -70,43 +105,7 @@ api_server_t::coroutine_t::coroutine_t(api_server_t& api_server, std::list<reque
     , server_connector{ssl_stream}
     , requests{std::move(requests)}
     , stop{false}
-    , resume{[&](coro_t::push_type& yield)
-{
-    yield();
-
-    while(true) {
-        if(requests.empty()) yield();
-        if(stop) return;
-
-        assert(requests.size());
-        auto req = std::move(requests.front());
-        std::pair<std::exception_ptr, nlohmann::json> api_call_res;
-
-        while(true) {
-            if(!ssl_stream.next_layer().is_open()) {
-                auto connect_res = server_connector.connect(api_server.host_, api_server.port_, yield, resume);
-                if(auto* ep = boost::get<std::exception_ptr>(&connect_res)) {
-                    api_call_res.first = *ep;
-                } else {
-                    api_call_res = do_api_call(req.call, req.api_token, req.request, yield, resume);
-                    if(stop) return;
-                }
-                break;
-            } else {
-                api_call_res = do_api_call(req.call, req.api_token, req.request, yield, resume);
-                if(stop) return;
-                if(!api_call_res.first) break;
-
-                // Server probably closed previous connection due to timeout
-                // Reconnect and retry API call
-                ssl_stream.next_layer().close();
-            }
-        }
-
-        req.callback(api_call_res.first, api_call_res.second);
-        requests.pop_front();
-    }
-}}
+    , resume{}
 {
 }
 
