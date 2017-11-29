@@ -24,16 +24,16 @@ public:
     using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
 
 public:
-    server_connector_t(ssl_stream_t& ssl_stream);
+    server_connector_t(boost::asio::io_service& io_service);
 
     boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
-        connect(const std::string& host, uint16_t port, coro_t::push_type& yield, coro_t::pull_type& resume);
+        connect(const std::shared_ptr<ssl_stream_t>& ssl_stream,
+                const std::string& host, uint16_t port,
+                coro_t::pull_type& yield, coro_t::push_type& resume);
     void cancel();
 
 private:
-    ssl_stream_t& ssl_stream_;
     boost::asio::ip::tcp::resolver resolver_;
-    bool stop_;
 };
 
 } // namespace framework

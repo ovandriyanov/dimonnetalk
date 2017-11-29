@@ -10,29 +10,28 @@
 
 #include "framework/server_connector.h"
 #include "util/asio.h"
+#include <boost/any.hpp>
 
 namespace framework {
 
 using namespace boost::system;
 
-server_connector_t::server_connector_t(ssl_stream_t& ssl_stream)
-    : ssl_stream_{ssl_stream}
-    , resolver_{ssl_stream.next_layer().get_io_service()}
-    , stop_{false}
+server_connector_t::server_connector_t(boost::asio::io_service& io_service)
+    : resolver_{io_service}
 {
 }
 
 boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
-server_connector_t::connect(const std::string& host, uint16_t port, coro_t::push_type& yield, coro_t::pull_type& resume)
+server_connector_t::connect(const std::shared_ptr<ssl_stream_t>& ssl_stream,
+                            const std::string& host, uint16_t port,
+                            coro_t::pull_type& yield, coro_t::push_type& resume)
 {
-    stop_ = false;
     BOOST_LOG_TRIVIAL(debug) << "Resolving " << host;
-    auto resolve_result = util::async_resolve(&resolver_, host, port, yield, resume);
-    if(stop_) return nullptr;
+    auto resolve_result = util::async_resolve(resolver_, host, port, yield, resume);
     if(auto* ec = boost::get<error_code>(&resolve_result))
         return std::make_exception_ptr(system_error{*ec, "Cannot resolve host name " + host});
 
-    auto& socket = ssl_stream_.next_layer();
+    auto& socket = ssl_stream->next_layer();
     error_code ec;
     boost::asio::ip::tcp::endpoint endpoint;
     for(const auto& result : boost::get<boost::asio::ip::tcp::resolver::results_type>(resolve_result)) {
@@ -41,8 +40,7 @@ server_connector_t::connect(const std::string& host, uint16_t port, coro_t::push
             continue;
         }
         BOOST_LOG_TRIVIAL(debug) << "Connecting to " << result.endpoint();
-        ec = util::async_connect(&socket, result.endpoint(), yield, resume);
-        if(stop_) return nullptr;
+        ec = util::async_connect(socket, result.endpoint(), yield, resume);
         if(ec) {
             BOOST_LOG_TRIVIAL(debug) << "Cannot connect to " << result.endpoint() << ": " << ec.message();
             continue;
@@ -58,8 +56,7 @@ server_connector_t::connect(const std::string& host, uint16_t port, coro_t::push
     }
 
     using handshake_type = boost::asio::ssl::stream_base::handshake_type;
-    ec = util::async_handshake(&ssl_stream_, handshake_type::client, yield, resume);
-    if(stop_) return nullptr;
+    ec = util::async_handshake(*ssl_stream, handshake_type::client, yield, resume, ssl_stream);
     if(ec) {
         return std::make_exception_ptr(system_error{ec, "Cannot connect to " + host + ':' + std::to_string(port) +
                                        ": SSL handshake: " + ec.message()});
@@ -71,8 +68,6 @@ server_connector_t::connect(const std::string& host, uint16_t port, coro_t::push
 void server_connector_t::cancel()
 {
     resolver_.cancel();
-    ssl_stream_.next_layer().cancel();
-    stop_ = true;
 }
 
 } // namespace framework
