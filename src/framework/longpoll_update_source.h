@@ -43,6 +43,16 @@ private:
 
 private:
     using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    struct ssl_t
+    {
+        ssl_t(boost::asio::io_service& io_service)
+            : context{boost::asio::ssl::context::sslv23_client}
+            , stream{io_service, context}
+        {}
+
+        boost::asio::ssl::context context;
+        ssl_stream_t stream;
+    };
 
     boost::asio::io_service& io_service_;
     const longpoll_config_t& longpoll_config_;
@@ -54,8 +64,7 @@ private:
     std::string host_;
     uint16_t port_;
 
-    boost::asio::ssl::context ssl_context_;
-    std::shared_ptr<ssl_stream_t> ssl_stream_;
+    std::shared_ptr<ssl_t> ssl_;
     server_connector_t server_connector_;
     boost::asio::steady_timer timer_;
     std::unique_ptr<util::push_coro_t> resume_;

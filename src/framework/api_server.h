@@ -49,14 +49,28 @@ private: // service_t
 private:
     void stop();
 
+std::pair<std::exception_ptr, nlohmann::json>
+    do_api_call(const std::string& call, const std::string& api_token,
+                const nlohmann::json& request_json, coro_t::pull_type& yield);
+
 private:
+    struct ssl_t
+    {
+        ssl_t(boost::asio::io_service& io_service)
+            : context{boost::asio::ssl::context::sslv23_client}
+            , stream{io_service, context}
+        {}
+
+        boost::asio::ssl::context context;
+        ssl_stream_t stream;
+    };
+
     const api_server_config_t& api_server_config_;
 
     std::string host_;
     uint16_t port_;
 
-    boost::asio::ssl::context ssl_context_;
-    std::shared_ptr<ssl_stream_t> ssl_stream_;
+    std::shared_ptr<ssl_t> ssl_;
     server_connector_t server_connector_;
     std::list<request_t> requests_;
     std::unique_ptr<util::push_coro_t> resume_;

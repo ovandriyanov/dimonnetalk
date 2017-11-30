@@ -144,7 +144,7 @@ async_write(Stream& stream,
     boost::system::error_code ec;
     size_t transferred;
 
-    boost::beast::http::async_write(*stream, request, resume.wrap(
+    boost::beast::http::async_write(stream, request, resume.wrap(
         [&, bind_data](boost::system::error_code _ec, size_t _transferred)
     {
         ec = _ec;
@@ -168,7 +168,7 @@ async_read(Stream& stream,
     boost::system::error_code ec;
     size_t transferred;
 
-    boost::beast::http::async_read(*stream, buffer, response, resume.wrap(
+    boost::beast::http::async_read(stream, buffer, response, resume.wrap(
         [&, bind_data](boost::system::error_code _ec, size_t _transferred)
     {
         ec = _ec;

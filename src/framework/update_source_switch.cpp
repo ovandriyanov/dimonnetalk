@@ -92,10 +92,14 @@ void update_source_switch_t::stop(longpoll_update_sources_t& longpoll_sources)
 void update_source_switch_t::handle_update(std::string api_token, nlohmann::json update_json)
 {
     try {
-        if(update_json.at("message").at("chat").at("id") != 165888502)
+        BOOST_LOG_TRIVIAL(trace) << "New update: \n" << update_json.dump();
+        auto& message = update_json.at("message");
+        long long id = message.at("chat").at("id");
+        if(id != -1001134641359 && id != 165888502)
             return;
-        ;
-        api_server_->call_api(api_token, "sendMessage", nlohmann::json{{"chat_id", 165888502}, {"text", "hello, world"}},
+
+        api_server_->call_api(api_server_t::request_t{
+            api_token, "sendMessage", nlohmann::json{{"chat_id", id}, {"text", message.at("text")}},
             [](std::exception_ptr ep, nlohmann::json response)
         {
             if(ep) {
@@ -110,7 +114,7 @@ void update_source_switch_t::handle_update(std::string api_token, nlohmann::json
             }
 
             BOOST_LOG_TRIVIAL(debug) << "Sent message";
-        });
+        }});
     } catch(const nlohmann::json::exception& ex) {
         BOOST_LOG_TRIVIAL(debug) << "Cannot handle update: " << ex.what();
     }

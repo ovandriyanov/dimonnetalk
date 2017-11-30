@@ -24,7 +24,7 @@ server_connector_t::server_connector_t(boost::asio::io_service& io_service)
 boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
 server_connector_t::connect(const std::shared_ptr<ssl_stream_t>& ssl_stream,
                             const std::string& host, uint16_t port,
-                            coro_t::pull_type& yield, coro_t::push_type& resume)
+                            coro_t::pull_type& yield, util::push_coro_t& resume)
 {
     BOOST_LOG_TRIVIAL(debug) << "Resolving " << host;
     auto resolve_result = util::async_resolve(resolver_, host, port, yield, resume);

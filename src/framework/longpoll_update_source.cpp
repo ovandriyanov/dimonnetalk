@@ -27,8 +27,6 @@ longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_s
     , api_token_{std::move(api_token)}
     , update_callback_{std::move(update_callback)}
     , port_{0}
-    , ssl_context_{boost::asio::ssl::context::sslv23_client}
-    , ssl_stream_{std::make_shared<ssl_stream_t>(io_service, ssl_context_)}
     , server_connector_{io_service}
     , timer_(io_service)
     , last_update_id_{0}
@@ -53,7 +51,9 @@ void longpoll_update_source_t::reload()
     {
         while(true) {
             try {
-                auto connect_result = server_connector_.connect(ssl_stream_, host_, port_, yield, *resume_);
+                ssl_ = std::make_shared<ssl_t>(io_service_);
+                auto connect_result = server_connector_.connect(
+                    std::shared_ptr<ssl_stream_t>(ssl_, &ssl_->stream), host_, port_, yield, *resume_);
                 if(auto* ep = boost::get<std::exception_ptr>(&connect_result))
                     std::rethrow_exception(*ep);
                 const auto endpoint = boost::get<boost::asio::ip::tcp::endpoint>(connect_result);
@@ -70,23 +70,23 @@ void longpoll_update_source_t::reload()
                     request.set(http::field::host, host_);
                     request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
-                    auto result = util::async_write(ssl_stream_, request, yield, *resume_);
+                    auto result = util::async_write(ssl_->stream, request, yield, *resume_, ssl_);
                     if(auto ec = std::get<0>(result)) {
                         throw system_error{ec, "Cannot write HTTP request to " +
                                                 endpoint.address().to_string() + ':' + std::to_string(endpoint.port()) +
                                                 ": " + ec.message()};
                     }
-                    BOOST_LOG_TRIVIAL(trace) << "Wrote HTTP request: \n" << request;
+                    // BOOST_LOG_TRIVIAL(trace) << "Wrote HTTP request: \n" << request;
 
                     http::response<http::string_body> response;
                     flat_buffer buffer;
-                    result = util::async_read(*ssl_stream_, buffer, response, yield, *resume_, ssl_stream_);
+                    result = util::async_read(ssl_->stream, buffer, response, yield, *resume_, ssl_);
                     if(auto ec = std::get<0>(result)) {
                         throw system_error{ec, "Cannot read HTTP response from " +
                                                 endpoint.address().to_string() + ':' + std::to_string(endpoint.port()) +
                                                 ": " + ec.message()};
                     }
-                    BOOST_LOG_TRIVIAL(trace) << "Got HTTP response: \n" << response;
+                    // BOOST_LOG_TRIVIAL(trace) << "Got HTTP response: \n" << response;
 
                     auto http_error = [](const std::string& what) {
                         return std::runtime_error{"Cannot process HTTP response: " + what};
@@ -116,15 +116,14 @@ void longpoll_update_source_t::reload()
                 }
             } catch(const std::runtime_error& ex) {
                 BOOST_LOG_TRIVIAL(info) << ex.what();
-                if(ssl_stream_->next_layer().is_open())
-                    ssl_stream_->next_layer().close(); // TODO: shutdown gracefully
+                ssl_ = nullptr; // TODO: shutdown gracefully
                 timer_.expires_from_now(std::chrono::seconds{longpoll_config_.retry_timeout});
                 auto ec = util::async_wait_timer(timer_, yield, *resume_);
                 if(ec) throw system_error{ec, "timer"};
             }
         }
     });
-    (*resume_);
+    (*resume_)();
 }
 
 void longpoll_update_source_t::stop(std::function<void()> cb)
@@ -135,10 +134,8 @@ void longpoll_update_source_t::stop(std::function<void()> cb)
 
 void longpoll_update_source_t::stop()
 {
-    if(ssl_stream_->next_layer().is_open()) {
-        ssl_stream_->next_layer().close(); // TODO: shutdown gracefully
-        ssl_stream_ = std::make_shared<ssl_stream_t>(io_service_, ssl_context_);
-    }
+    if(ssl_->stream.next_layer().is_open())
+        ssl_->stream.next_layer().close(); // TODO: shutdown gracefully
     server_connector_.cancel();
     timer_.cancel();
     last_update_id_ = 0;

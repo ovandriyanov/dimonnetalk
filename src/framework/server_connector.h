@@ -15,6 +15,8 @@
 #include <boost/coroutine2/all.hpp>
 #include <boost/variant.hpp>
 
+#include "util/coroutine.h"
+
 namespace framework {
 
 class server_connector_t
@@ -29,7 +31,7 @@ public:
     boost::variant<std::exception_ptr, boost::asio::ip::tcp::endpoint>
         connect(const std::shared_ptr<ssl_stream_t>& ssl_stream,
                 const std::string& host, uint16_t port,
-                coro_t::pull_type& yield, coro_t::push_type& resume);
+                coro_t::pull_type& yield, util::push_coro_t& resume);
     void cancel();
 
 private:
