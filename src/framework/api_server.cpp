@@ -14,20 +14,25 @@
 
 namespace framework {
 
+using namespace boost::system;
+
 api_server_t::api_server_t(boost::asio::io_service& io_service,
                            const api_server_config_t& api_server_config)
     : service_t{io_service}
     , api_server_config_{api_server_config}
     , server_connector_{io_service}
     , port_{0}
+    , ping_timer_{io_service}
 {
 }
 
 void api_server_t::call_api(request_t request)
 {
     requests_.emplace_back(std::move(request));
-    if(resume_ && requests_.size() == 1)
-        (*resume_)();
+    if(resume_ && requests_.size() == 1) {
+        if(ssl_) ping_timer_.cancel();
+        else (*resume_)();
+    }
 }
 
 void api_server_t::reload()
@@ -47,8 +52,22 @@ void api_server_t::reload()
     resume_ = std::make_unique<util::push_coro_t>(
         [&](coro_t::pull_type& yield)
     {
+        unsigned pings_remain;
         while(true) {
-            if(requests_.empty()) yield();
+            while(requests_.empty()) {
+                if(!ssl_) {
+                    yield();
+                } else if(pings_remain) {
+                    ping_timer_.expires_from_now(std::chrono::seconds{60});
+                    auto ec = util::async_wait_timer(ping_timer_, yield, *resume_);
+                    if(requests_.size()) break;
+                    if(ec) throw system_error{ec, "timer"};
+                    ping(yield);
+                    --pings_remain;
+                } else {
+                    ssl_ = nullptr;
+                }
+            }
 
             assert(requests_.size());
             auto req = std::move(requests_.front());
@@ -59,10 +78,12 @@ void api_server_t::reload()
                     ssl_ = std::make_shared<ssl_t>(io_service_);
                     auto connect_res = server_connector_.connect(
                         std::shared_ptr<ssl_stream_t>(ssl_, &ssl_->stream), host_, port_, yield, *resume_);
-                    if(auto* ep = boost::get<std::exception_ptr>(&connect_res))
+                    if(auto* ep = boost::get<std::exception_ptr>(&connect_res)) {
                         api_call_res.first = *ep;
-                    else
+                    } else {
+                        pings_remain = 5;
                         api_call_res = do_api_call(req.call, req.api_token, req.request, yield);
+                    }
                     break;
                 } else {
                     api_call_res = do_api_call(req.call, req.api_token, req.request, yield);
@@ -89,10 +110,41 @@ void api_server_t::stop(std::function<void()> cb)
 
 void api_server_t::stop()
 {
-    if(ssl_->stream.next_layer().is_open())
-        ssl_->stream.next_layer().close(); // TODO: shutdown gracefully
+    ssl_ = nullptr; // TODO: shutdown gracefully
     server_connector_.cancel();
+    ping_timer_.cancel();
     resume_ = nullptr;
+}
+
+void api_server_t::ping(coro_t::pull_type& yield)
+{
+    try {
+        using namespace boost::beast;
+        BOOST_LOG_TRIVIAL(debug) << "API server: ping";
+
+        http::request<http::empty_body> request;
+        request.version(11);
+        request.method(http::verb::get);
+        request.target("/");
+        request.set(http::field::host, host_);
+        request.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+        BOOST_LOG_TRIVIAL(trace) << "Writing HTTP request: \n" << request;
+        auto result = util::async_write(ssl_->stream, request, yield, *resume_, ssl_);
+        if(auto ec = std::get<0>(result))
+            throw system_error{ec, "Cannot write HTTP request to API server: " + ec.message()};
+        BOOST_LOG_TRIVIAL(debug) << "Wrote HTTP request; reading response";
+
+        http::response<http::string_body> response;
+        flat_buffer buffer;
+        result = util::async_read(ssl_->stream, buffer, response, yield, *resume_, ssl_);
+        if(auto ec = std::get<0>(result))
+            throw system_error{ec, "Cannot read HTTP response from API server: " + ec.message()};
+        BOOST_LOG_TRIVIAL(trace) << "Got HTTP response: \n" << response;
+    } catch(const std::runtime_error& ex) {
+        BOOST_LOG_TRIVIAL(debug) << ex.what();
+        ssl_ = nullptr;
+    }
 }
 
 std::pair<std::exception_ptr, nlohmann::json>

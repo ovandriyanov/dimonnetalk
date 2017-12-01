@@ -9,6 +9,7 @@
 #ifndef FRAMEWORK_API_SERVER_H
 #define FRAMEWORK_API_SERVER_H
 
+#include <boost/asio/steady_timer.hpp>
 #include <boost/coroutine2/all.hpp>
 #include <boost/variant.hpp>
 
@@ -48,6 +49,7 @@ private: // service_t
 
 private:
     void stop();
+    void ping(coro_t::pull_type& yield);
 
 std::pair<std::exception_ptr, nlohmann::json>
     do_api_call(const std::string& call, const std::string& api_token,
@@ -73,6 +75,7 @@ private:
     std::shared_ptr<ssl_t> ssl_;
     server_connector_t server_connector_;
     std::list<request_t> requests_;
+    boost::asio::steady_timer ping_timer_;
     std::unique_ptr<util::push_coro_t> resume_;
 };
 
