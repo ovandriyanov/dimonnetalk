@@ -8,6 +8,7 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
+#include "framework/api_server.h"
 #include "framework/config.h"
 #include "framework/inventory.h"
 #include "framework/update_source_switch.h"
@@ -71,10 +72,14 @@ inventory_t make_inventory(boost::asio::io_service& io_service, fs::path config_
 {
     auto config_service = std::make_unique<config_service_t>(io_service, config_path);
     auto update_source_switch = std::make_unique<update_source_switch_t>(io_service, config_service->config());
+    auto api_server = std::make_unique<api_server_t>(io_service, config_service->config().api_server);
+
+    update_source_switch->init(api_server.get());
 
     std::list<std::unique_ptr<service_t>> services;
     services.emplace_back(std::move(config_service));
     services.emplace_back(std::move(update_source_switch));
+    services.emplace_back(std::move(api_server));
 
     return inventory_t{std::move(services)};
 }

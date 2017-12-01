@@ -12,8 +12,7 @@
 
 #include "framework/inventory.h"
 #include "util/asio.h"
-
-#include <type_traits>
+#include "util/coroutine.h"
 
 using namespace boost::system;
 namespace fw = framework;
@@ -34,32 +33,31 @@ int main() try
     inventory.reload();
 
     using namespace boost::coroutines2;
-    bool stop = false;
-    coroutine<void>::pull_type hup_resume{[&](coroutine<void>::push_type& yield) {
+    std::unique_ptr<util::push_coro_t> hup_resume{new util::push_coro_t{[&](coroutine<void>::pull_type& yield) {
         while(true) {
             BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGHUP";
-            auto res = util::async_wait_signal(&sigset_hup, yield, hup_resume);
-            if(stop) return;
+            auto res = util::async_wait_signal(sigset_hup, yield, *hup_resume);
             if(auto* ec = boost::get<error_code>(&res))
                 throw system_error{*ec, "signal"};
             BOOST_LOG_TRIVIAL(info) << "SIGHUP received, reloading";
             inventory.reload();
         }
-    }};
+    }}};
 
-    coroutine<void>::pull_type term_resume{
-        [&](coroutine<void>::push_type& yield)
-    {
+    std::unique_ptr<util::push_coro_t> term_resume{new util::push_coro_t{[&](coroutine<void>::pull_type& yield) {
         BOOST_LOG_TRIVIAL(debug) << "Waiting for SIGTERM/SIGINT";
-        auto res = util::async_wait_signal(&sigset_term, yield, term_resume);
+        auto res = util::async_wait_signal(sigset_term, yield, *term_resume);
         if(auto* ec = boost::get<error_code>(&res))
             throw system_error{*ec, "signal"};
         BOOST_LOG_TRIVIAL(info) << "Termination signal received, stopping...";
         inventory.stop(io_service, []() { BOOST_LOG_TRIVIAL(info) << "Stopped"; });
 
         sigset_hup.cancel();
-        stop = true;
-    }};
+        hup_resume = nullptr;
+    }}};
+
+    (*hup_resume)();
+    (*term_resume)();
 
     io_service.run();
 

@@ -31,6 +31,8 @@ config_t load_config(const fs::path& path)
 
     auto& api_server_json = json_config.at("api_server");
     config.api_server.host = api_server_json.at("host");
+    if(config.api_server.host.empty())
+        throw std::runtime_error{"API server host must not be empty"};
     config.api_server.port = api_server_json.at("port");
 
     auto& update_source_json = json_config.at("update_source");

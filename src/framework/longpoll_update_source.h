@@ -20,6 +20,7 @@
 
 #include "framework/config.h"
 #include "framework/server_connector.h"
+#include "util/coroutine.h"
 
 namespace framework {
 
@@ -38,29 +39,21 @@ public:
     void stop(std::function<void()> cb);
 
 private:
-    using coro_t = boost::coroutines2::coroutine<void>;
-    class coroutine_t : public std::enable_shared_from_this<coroutine_t>
+    void stop();
+
+private:
+    using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    struct ssl_t
     {
-    public:
-        coroutine_t(longpoll_update_source_t& longpoll);
+        ssl_t(boost::asio::io_service& io_service)
+            : context{boost::asio::ssl::context::sslv23_client}
+            , stream{io_service, context}
+        {}
 
-        template <typename T>
-        std::shared_ptr<T> make_shared(T& field) { return std::shared_ptr<T>(shared_from_this(), &field); }
-
-    public:
-        longpoll_update_source_t& longpoll;
-        boost::asio::ssl::context ssl_context;
-        boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_stream;
-        server_connector_t server_connector;
-        boost::asio::steady_timer timer;
-        bool stop;
-        coro_t::pull_type resume;
+        boost::asio::ssl::context context;
+        ssl_stream_t stream;
     };
 
-private:
-    void stop(coroutine_t& coro);
-
-private:
     boost::asio::io_service& io_service_;
     const longpoll_config_t& longpoll_config_;
     const api_server_config_t& api_server_config_;
@@ -71,7 +64,10 @@ private:
     std::string host_;
     uint16_t port_;
 
-    std::shared_ptr<coroutine_t> coroutine_;
+    std::shared_ptr<ssl_t> ssl_;
+    server_connector_t server_connector_;
+    boost::asio::steady_timer timer_;
+    std::unique_ptr<util::push_coro_t> resume_;
     int last_update_id_;
 };
 
