@@ -27,7 +27,7 @@ private: // service_t
 private:
     const config_t& config_;
 
-    std::map<std::string /* API token */, std::shared_ptr<bot_t>> bots_;
+    std::map<std::tuple<std::string /* API token */, std::string /* type */>, std::unique_ptr<bot_t>> bots_;
 };
 
 } // namespace framework

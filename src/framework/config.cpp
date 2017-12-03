@@ -6,8 +6,6 @@
  *
  */
 
-#include <nlohmann/json.hpp>
-
 #include "framework/config.h"
 #include "util/file_chunk_range.h"
 #include "util/flatten_range.h"
@@ -49,9 +47,18 @@ config_t load_config(const fs::path& path)
     for(auto& item : json_config.at("bots")) {
         config.bots.emplace_back();
         auto& bot_config = config.bots.back();
-        bot_config.name = item.at("name").get<std::string>();
+        bot_config.type = item.at("type").get<std::string>();
         bot_config.api_token = item.at("api_token").get<std::string>();
-        bot_config.script_path = item.at("script_path").get<std::string>();
+        if(bot_config.type == "lua") {
+            lua_bot_config_t lua_bot_config;
+            lua_bot_config.script_path = item.at("script_path").get<std::string>();
+            bot_config.type_specific_config = std::move(lua_bot_config);
+            auto bot_data = item.find("bot_data");
+            if(bot_data != item.end())
+                bot_config.bot_data = std::move(*bot_data);
+        } else {
+            throw load_error("Unsupported bot type: " + bot_config.type);
+        }
     }
     return config;
 }

@@ -15,6 +15,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/variant.hpp>
 
+#include <nlohmann/json.hpp>
+
 namespace framework {
 
 struct api_server_config_t
@@ -31,11 +33,17 @@ struct longpoll_config_t
 
 using update_source_config_t = boost::variant<longpoll_config_t>;
 
+struct lua_bot_config_t
+{
+    boost::filesystem::path script_path;
+};
+
 struct bot_config_t
 {
-    std::string name;
+    std::string type;
     std::string api_token;
-    boost::filesystem::path script_path;
+    boost::variant<lua_bot_config_t> type_specific_config;
+    nlohmann::json bot_data;
 };
 
 struct config_t

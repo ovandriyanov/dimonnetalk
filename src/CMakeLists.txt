@@ -4,6 +4,8 @@ set(BOOST_INCLUDE_PATH "$ENV{BOOST_INCLUDE_PATH}")
 set(BOOST_LIB_PATH "$ENV{BOOST_LIB_PATH}")
 set(OPENSSL_INCLUDE_PATH "$ENV{OPENSSL_INCLUDE_PATH}")
 set(OPENSSL_LIB_PATH "$ENV{OPENSSL_LIB_PATH}")
+set(LUA_INCLUDE_PATH "$ENV{LUA_INCLUDE_PATH}")
+set(LUA_LIB_PATH "$ENV{LUA_LIB_PATH}")
 
 add_subdirectory(framework)
 add_subdirectory(util)
@@ -33,4 +35,4 @@ find_library(BOOST_LOG_SETUP NAMES libboost_log_setup.a boost_log_setup PATHS ${
 find_library(BOOST_LOG NAMES libboost_log.a boost_log PATHS ${BOOST_LIB_PATH})
 
 add_executable(dimonnetalkd main.cpp)
-target_link_libraries(dimonnetalkd framework util ${BOOST_LOG} ${BOOST_LOG_SETUP} boost_context boost_system boost_thread ssl crypto pthread)
+target_link_libraries(dimonnetalkd framework util ${BOOST_LOG} ${BOOST_LOG_SETUP} boost_filesystem boost_context boost_system boost_thread ssl crypto pthread)
