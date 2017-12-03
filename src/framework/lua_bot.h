@@ -9,7 +9,7 @@
 #ifndef FRAMEWORK_LUA_BOT_H
 #define FRAMEWORK_LUA_BOT_H
 
-#include <lua.h>
+#include <lua.hpp>
 
 #include "framework/bot.h"
 #include "framework/config.h"

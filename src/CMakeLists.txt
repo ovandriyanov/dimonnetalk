@@ -28,6 +28,9 @@ endif()
 if(OPENSSL_LIB_PATH)
     link_directories("${OPENSSL_LIB_PATH}")
 endif()
+if(LUA_LIB_PATH)
+    link_directories("${LUA_LIB_PATH}")
+endif()
 
 set(cmake_find_library_suffixes ".a")
 
@@ -35,4 +38,22 @@ find_library(BOOST_LOG_SETUP NAMES libboost_log_setup.a boost_log_setup PATHS ${
 find_library(BOOST_LOG NAMES libboost_log.a boost_log PATHS ${BOOST_LIB_PATH})
 
 add_executable(dimonnetalkd main.cpp)
-target_link_libraries(dimonnetalkd framework util ${BOOST_LOG} ${BOOST_LOG_SETUP} boost_filesystem boost_context boost_system boost_thread ssl crypto pthread)
+target_link_libraries(dimonnetalkd
+    framework
+    util
+
+    lua
+    dl
+
+    ${BOOST_LOG}
+    ${BOOST_LOG_SETUP}
+    boost_filesystem
+    boost_context
+    boost_system
+    boost_thread
+
+    ssl
+    crypto
+
+    pthread
+)

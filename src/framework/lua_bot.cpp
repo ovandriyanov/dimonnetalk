@@ -8,8 +8,7 @@
 
 #include "framework/lua_bot.h"
 
-#include <lauxlib.h>
-#include <lualib.h>
+#include <boost/log/trivial.hpp>
 
 namespace framework {
 
@@ -30,11 +29,17 @@ void lua_bot_t::reload()
 
     script_path_ = lua_bot_config_.script_path;
 
+    resume_ = nullptr;
     lua_state_.reset(luaL_newstate());
     if(!lua_state_) throw std::runtime_error{"Cannot create Lua state"};
 
     luaL_openlibs(lua_state_.get());
-    luaL_loadfile(lua_state_.get(), script_path_.c_str());
+    if(int ec = luaL_loadfile(lua_state_.get(), script_path_.c_str())) {
+        throw std::runtime_error{"Cannot load Lua script file " + script_path_.string() +
+                                 ": " + lua_tostring(lua_state_.get(), -1)};
+    }
+
+    BOOST_LOG_TRIVIAL(debug) << "Loaded Lua script";
 }
 
 void lua_bot_t::stop()
