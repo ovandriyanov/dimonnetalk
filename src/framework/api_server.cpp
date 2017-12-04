@@ -110,7 +110,12 @@ void api_server_t::stop(std::function<void()> cb)
 
 void api_server_t::stop()
 {
-    ssl_ = nullptr; // TODO: shutdown gracefully
+    if(ssl_) {
+        // TODO: shutdown gracefully
+        if(ssl_->stream.next_layer().is_open())
+            ssl_->stream.next_layer().close();
+        ssl_ = nullptr;
+    }
     server_connector_.cancel();
     ping_timer_.cancel();
     resume_ = nullptr;

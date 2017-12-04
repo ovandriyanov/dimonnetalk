@@ -134,7 +134,12 @@ void longpoll_update_source_t::stop(std::function<void()> cb)
 
 void longpoll_update_source_t::stop()
 {
-    ssl_ = nullptr; // TODO: shutdown gracefully
+    if(ssl_) {
+        // TODO: shutdown gracefully
+        if(ssl_->stream.next_layer().is_open())
+            ssl_->stream.next_layer().close();
+        ssl_ = nullptr;
+    }
     server_connector_.cancel();
     timer_.cancel();
     last_update_id_ = 0;

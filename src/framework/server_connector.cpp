@@ -40,7 +40,7 @@ server_connector_t::connect(const std::shared_ptr<ssl_stream_t>& ssl_stream,
             continue;
         }
         BOOST_LOG_TRIVIAL(debug) << "Connecting to " << result.endpoint();
-        ec = util::async_connect(socket, result.endpoint(), yield, resume);
+        ec = util::async_connect(socket, result.endpoint(), yield, resume, ssl_stream);
         if(ec) {
             BOOST_LOG_TRIVIAL(debug) << "Cannot connect to " << result.endpoint() << ": " << ec.message();
             continue;
