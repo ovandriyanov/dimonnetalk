@@ -55,5 +55,5 @@ wget https://www.lua.org/ftp/lua-5.3.4.tar.gz && tar -xzf lua-5.3.4.tar.gz
 tar -xzf lua-5.3.4.tar.gz
 cd lua-5.3.4
 make linux # Add -jN option to speed up the build where N is the number of concurrent build jobs
-make INSTALL_ROOT="`pwd`/build" install
+make INSTALL_TOP="`pwd`/build" install
 ```
