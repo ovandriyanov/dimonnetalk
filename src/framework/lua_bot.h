@@ -28,9 +28,6 @@ private: // bot_t
     void stop() final;
 
 private:
-    void setup_lua_globals();
-
-private:
     const bot_config_t& bot_config_;
     const lua_bot_config_t& lua_bot_config_;
 

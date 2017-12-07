@@ -48,6 +48,8 @@ static int log(lua_State* lua_state)
     #undef LOG
 }
 
+static void setup_log(lua_State* lua_state);
+
 // bot_t
 void lua_bot_t::reload()
 {
@@ -68,7 +70,14 @@ void lua_bot_t::reload()
                                  ": " + lua_tostring(lua_state_.get(), -1)};
     }
 
-    setup_lua_globals();
+    auto open_log = [](lua_State* lua_state) {
+        lua_newtable(lua_state); // "log" table
+        setup_log(lua_state);
+        return 1;
+    };
+    luaL_requiref(lua_state_.get(), "dimonnetalk.log", open_log, false);
+    lua_pop(lua_state_.get(), 1);
+
     if(lua_pcall(lua_state_.get(), 0, 0, 0)) {
         throw std::runtime_error{"Cannot execute Lua script file " + script_path_.string() +
                                  ": " + lua_tostring(lua_state_.get(), -1)};
@@ -85,12 +94,8 @@ void lua_bot_t::stop()
 
 }
 
-void lua_bot_t::setup_lua_globals()
+static void setup_log(lua_State* lua_state)
 {
-    lua_newtable(lua_state_.get()); // "dimonnetalk" table
-
-    lua_newtable(lua_state_.get()); // "log" table
-
     std::tuple<boost::log::trivial::severity_level, const char*> levels[] = {
         {boost::log::trivial::trace,   "trace"},
         {boost::log::trivial::debug,   "debug"},
@@ -102,15 +107,10 @@ void lua_bot_t::setup_lua_globals()
 
     for(auto level : levels) {
         lua_CFunction x;
-        lua_pushinteger(lua_state_.get(), std::get<0>(level));
-        lua_pushcclosure(lua_state_.get(), log, 1);
-        lua_setfield(lua_state_.get(), -2, std::get<1>(level));
+        lua_pushinteger(lua_state, std::get<0>(level));
+        lua_pushcclosure(lua_state, log, 1);
+        lua_setfield(lua_state, -2, std::get<1>(level));
     }
-    lua_setfield(lua_state_.get(), -2, "log");
-
-    // lua_newtable(lua_state_.get()); // "timer" table
-
-    lua_setglobal(lua_state_.get(), "dimonnetalk");
 }
 
 } // namespace framework
