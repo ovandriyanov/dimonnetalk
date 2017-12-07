@@ -6,14 +6,19 @@
  *
  */
 
-#include "framework/lua_bot.h"
-
+#include <boost/asio/steady_timer.hpp>
 #include <boost/log/trivial.hpp>
+
+#include "framework/lua_bot.h"
+#include "util/asio.h"
 
 namespace framework {
 
-lua_bot_t::lua_bot_t(const bot_config_t& bot_config, const lua_bot_config_t& lua_bot_config)
-    : bot_config_{bot_config}
+lua_bot_t::lua_bot_t(boost::asio::io_service& io_service,
+                     const bot_config_t& bot_config,
+                     const lua_bot_config_t& lua_bot_config)
+    : io_service_{io_service}
+    , bot_config_{bot_config}
     , lua_bot_config_{lua_bot_config}
     , lua_state_{nullptr, lua_close}
 {
@@ -48,7 +53,7 @@ static int log(lua_State* lua_state)
     #undef LOG
 }
 
-static void setup_log(lua_State* lua_state);
+
 
 // bot_t
 void lua_bot_t::reload()
@@ -70,23 +75,37 @@ void lua_bot_t::reload()
                                  ": " + lua_tostring(lua_state_.get(), -1)};
     }
 
+    lua_pushlightuserdata(lua_state_.get(), &io_service_);
+    lua_setfield(lua_state_.get(), LUA_REGISTRYINDEX, "io_service");
+
     auto open_log = [](lua_State* lua_state) {
-        lua_newtable(lua_state); // "log" table
+        lua_newtable(lua_state);
         setup_log(lua_state);
         return 1;
     };
     luaL_requiref(lua_state_.get(), "dimonnetalk.log", open_log, false);
     lua_pop(lua_state_.get(), 1);
 
-    if(lua_pcall(lua_state_.get(), 0, 0, 0)) {
-        throw std::runtime_error{"Cannot execute Lua script file " + script_path_.string() +
-                                 ": " + lua_tostring(lua_state_.get(), -1)};
-    }
+    auto open_io = [](lua_State* lua_state) {
+        return setup_io(lua_state);
+    };
+    luaL_requiref(lua_state_.get(), "dimonnetalk.io", open_io, false);
+    lua_pop(lua_state_.get(), 1);
 
-    if(lua_getglobal(lua_state_.get(), "start") != LUA_TFUNCTION)
-        throw std::runtime_error{"Cannot find function 'start' in file " + script_path_.string()};
+    resume_ = std::make_unique<util::push_coro_t>([this](boost::coroutines2::coroutine<void>::pull_type& yield) {
+        lua_pushlightuserdata(lua_state_.get(), &yield);
+        lua_setfield(lua_state_.get(), LUA_REGISTRYINDEX, "yield");
 
-    BOOST_LOG_TRIVIAL(debug) << "Loaded Lua script " << script_path_;
+        lua_pushlightuserdata(lua_state_.get(), this);
+        lua_setfield(lua_state_.get(), LUA_REGISTRYINDEX, "bot");
+
+        if(lua_pcall(lua_state_.get(), 0, 0, 0)) {
+            throw std::runtime_error{"Cannot execute Lua script file " + script_path_.string() +
+                                     ": " + lua_tostring(lua_state_.get(), -1)};
+        }
+    });
+
+    (*resume_)();
 }
 
 void lua_bot_t::stop()
@@ -94,7 +113,7 @@ void lua_bot_t::stop()
 
 }
 
-static void setup_log(lua_State* lua_state)
+void lua_bot_t::setup_log(lua_State* lua_state)
 {
     std::tuple<boost::log::trivial::severity_level, const char*> levels[] = {
         {boost::log::trivial::trace,   "trace"},
@@ -111,6 +130,80 @@ static void setup_log(lua_State* lua_state)
         lua_pushcclosure(lua_state, log, 1);
         lua_setfield(lua_state, -2, std::get<1>(level));
     }
+}
+
+template <typename T>
+static T& pop_userdata(lua_State* lua_state)
+{
+    assert(lua_islightuserdata(lua_state, -1) || lua_isuserdata(lua_state, -1));
+    auto& ret = *static_cast<T*>(lua_touserdata(lua_state, -1));
+    lua_pop(lua_state, 1);
+    return ret;
+}
+
+template <typename T>
+static int destroy_userdata(lua_State* lua_state)
+{
+    auto& object = pop_userdata<T>(lua_state);
+    object.~T();
+    return 0;
+}
+
+template <typename T>
+static T& get_from_registry(lua_State* lua_state, const char* name)
+{
+    lua_getfield(lua_state, LUA_REGISTRYINDEX, name);
+    return pop_userdata<T>(lua_state);
+}
+
+int lua_bot_t::setup_io(lua_State* lua_state)
+{
+    auto timer_foo = [](lua_State* lua_state) {
+        BOOST_LOG_TRIVIAL(debug) << "foo called";
+        return 0;
+    };
+
+    auto timer_async_wait = [](lua_State* lua_state) {
+        auto ms = luaL_checkinteger(lua_state, -1);
+        lua_pop(lua_state, 1);
+        auto& timer = pop_userdata<boost::asio::steady_timer>(lua_state);
+        auto& bot = get_from_registry<lua_bot_t>(lua_state, "bot");
+        auto& yield = get_from_registry<boost::coroutines2::coroutine<void>::pull_type>(lua_state, "yield");
+        timer.expires_from_now(std::chrono::milliseconds{ms});
+        util::async_wait_timer(timer, yield, *bot.resume_);
+        return 0;
+    };
+
+    luaL_Reg timer_methods[] = {
+        {"foo", timer_foo},
+        {"async_wait", timer_async_wait},
+        {"__gc", destroy_userdata<boost::asio::steady_timer>},
+        {nullptr, nullptr}
+    };
+
+    int exists = !luaL_newmetatable(lua_state, "dimonnetalk.io.timer");
+    assert(!exists);
+    lua_pushvalue(lua_state, -1);
+    lua_setfield(lua_state, -2, "__index");
+    luaL_setfuncs(lua_state, timer_methods, 0);
+    lua_pop(lua_state, 1);
+
+    auto timer_new = [](lua_State* lua_state) {
+        void* ptr = lua_newuserdata(lua_state, sizeof(boost::asio::steady_timer));
+        auto* timer = new(ptr) boost::asio::steady_timer{get_from_registry<boost::asio::io_service>(lua_state, "io_service")};
+        luaL_setmetatable(lua_state, "dimonnetalk.io.timer");
+        return 1;
+    };
+
+    luaL_Reg timer_functions[] = {
+        {"new", timer_new},
+        {nullptr, nullptr}
+    };
+
+    lua_newtable(lua_state);
+    luaL_newlib(lua_state, timer_functions);
+    lua_setfield(lua_state, -2, "timer");
+    return 1;
 }
 
 } // namespace framework
