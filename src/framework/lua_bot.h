@@ -31,7 +31,7 @@ private: // bot_t
     void stop() final;
 
 private:
-    static void setup_log(lua_State* lua_state);
+    static int setup_log(lua_State* lua_state);
     static int setup_io(lua_State* lua_state);
 
 private:
