@@ -18,21 +18,18 @@
 #include "util/coroutine.h"
 
 namespace framework {
+namespace lua {
 
-class lua_bot_t : public bot_t
+class bot_t : public framework::bot_t
 {
 public:
-    lua_bot_t(boost::asio::io_service& io_service,
+    bot_t(boost::asio::io_service& io_service,
               const bot_config_t& bot_config,
               const lua_bot_config_t& lua_bot_config);
 
-private: // bot_t
+private: // framework::bot_t
     void reload() final;
     void stop() final;
-
-private:
-    static int setup_log(lua_State* lua_state);
-    static int setup_io(lua_State* lua_state);
 
 private:
     boost::asio::io_service& io_service_;
@@ -45,6 +42,7 @@ private:
     std::unique_ptr<util::push_coro_t> resume_;
 };
 
+} // namespace lua
 } // namespace framework
 
 #endif // FRAMEWORK_LUA_BOT_H
