@@ -11,9 +11,10 @@
 
 namespace framework {
 
-bot_store_t::bot_store_t(boost::asio::io_service& io_service, const config_t& config)
+bot_store_t::bot_store_t(boost::asio::io_service& io_service, const config_t& config, api_server_t& api_server)
     : service_t{io_service}
     , config_{config}
+    , api_server_{api_server}
 {
 }
 
@@ -26,7 +27,8 @@ void bot_store_t::reload()
 
         std::unique_ptr<bot_t> operator()(const lua_bot_config_t& lua_bot_config)
         {
-            return std::make_unique<lua::bot_t>(bot_store.io_service_, bot_config, lua_bot_config);
+            return std::make_unique<lua::bot_t>(bot_store.io_service_, bot_config, bot_store.config_.api_server,
+                                                lua_bot_config, bot_store.api_server_);
         }
 
         bot_store_t& bot_store;

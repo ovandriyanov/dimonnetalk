@@ -29,6 +29,8 @@ add_library(framework
     inventory.cpp
     longpoll_update_source.cpp
     lua/bot.cpp
+    lua/framework.cpp
+    lua/globals.cpp
     lua/io.cpp
     lua/io/timer.cpp
     lua/log.cpp

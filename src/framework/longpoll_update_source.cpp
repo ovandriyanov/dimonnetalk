@@ -19,13 +19,11 @@ using namespace boost::system;
 longpoll_update_source_t::longpoll_update_source_t(boost::asio::io_service& io_service,
                                                    const longpoll_config_t& longpoll_config,
                                                    const api_server_config_t& api_server_config,
-                                                   std::string api_token,
-                                                   std::function<void(nlohmann::json)> update_callback)
+                                                   std::string api_token)
     : io_service_{io_service}
     , longpoll_config_{longpoll_config}
     , api_server_config_{api_server_config}
     , api_token_{std::move(api_token)}
-    , update_callback_{std::move(update_callback)}
     , port_{0}
     , server_connector_{io_service}
     , timer_(io_service)
@@ -51,14 +49,19 @@ void longpoll_update_source_t::reload()
     {
         while(true) {
             try {
-                ssl_ = std::make_shared<ssl_t>(io_service_);
+                auto ssl = std::make_shared<ssl_t>(io_service_);
                 auto connect_result = server_connector_.connect(
-                    std::shared_ptr<ssl_stream_t>(ssl_, &ssl_->stream), host_, port_, yield, *resume_);
+                    std::shared_ptr<ssl_stream_t>{ssl, &ssl->stream}, host_, port_, yield, *resume_);
                 if(auto* ep = boost::get<std::exception_ptr>(&connect_result))
                     std::rethrow_exception(*ep);
+
+                ssl_ = std::move(ssl);
                 const auto endpoint = boost::get<boost::asio::ip::tcp::endpoint>(connect_result);
 
                 while(true) {
+                    if(callbacks_.empty()) yield();
+                    assert(callbacks_.size());
+
                     using namespace boost::beast;
                     http::request<http::empty_body> request;
                     request.version(11);
@@ -103,19 +106,19 @@ void longpoll_update_source_t::reload()
                         auto response_json = nlohmann::json::parse(response.body());
                         if(response_json.at("ok") != true)
                             throw http_error("Field 'ok' is not 'True'");
-                        for(auto& item : response_json.at("result")) {
-                            int update_id = item.at("update_id");
-                            if(last_update_id_ > update_id)
-                                continue;
-                            last_update_id_ = update_id;
-                            update_callback_(std::move(item));
-                        }
+
+                        for(auto& item : response_json.at("result"))
+                            pending_updates_.emplace_back(std::move(item));
+
+                        process_pending_updates();
                     } catch(const nlohmann::json::exception& ex) {
                         throw http_error(ex.what());
                     }
                 }
             } catch(const std::runtime_error& ex) {
                 BOOST_LOG_TRIVIAL(info) << ex.what();
+                io_service_.post(std::bind(std::move(std::move(callbacks_.front())), std::current_exception(), nlohmann::json{}));
+                callbacks_.pop_front();
                 ssl_ = nullptr; // TODO: shutdown gracefully
                 timer_.expires_from_now(std::chrono::seconds{longpoll_config_.retry_timeout});
                 auto ec = util::async_wait_timer(timer_, yield, *resume_);
@@ -132,6 +135,13 @@ void longpoll_update_source_t::stop(std::function<void()> cb)
     io_service_.post(std::move(cb));
 }
 
+void longpoll_update_source_t::get_update(cb_t callback)
+{
+    callbacks_.emplace_back(std::move(callback));
+    process_pending_updates();
+    if(callbacks_.size() == 1 && ssl_) (*resume_)();
+}
+
 void longpoll_update_source_t::stop()
 {
     if(ssl_) {
@@ -144,6 +154,22 @@ void longpoll_update_source_t::stop()
     timer_.cancel();
     last_update_id_ = 0;
     resume_ = nullptr;
+}
+
+void longpoll_update_source_t::process_pending_updates()
+{
+    while(callbacks_.size() && pending_updates_.size()) {
+        auto item = std::move(pending_updates_.front());
+        pending_updates_.pop_front();
+        int update_id = item.at("update_id");
+        if(last_update_id_ > update_id)
+            continue;
+        last_update_id_ = update_id;
+
+        assert(callbacks_.size());
+        io_service_.post(std::bind(std::move(callbacks_.front()), nullptr, std::move(item)));
+        callbacks_.pop_front();
+    }
 }
 
 } // namespace framework

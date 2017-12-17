@@ -11,6 +11,7 @@
 
 #include <boost/asio/io_service.hpp>
 
+#include "framework/lua/bot.h"
 #include "util/coroutine.h"
 
 namespace framework {
@@ -18,9 +19,7 @@ namespace lua {
 
 struct globals_t
 {
-    boost::asio::io_service& io_service;
-    boost::coroutines2::coroutine<void>::pull_type& yield;
-    util::push_coro_t& resume;
+    bot_t* bot;
 };
 
 extern const char* globals_name;

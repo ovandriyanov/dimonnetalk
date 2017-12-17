@@ -42,8 +42,7 @@ void update_source_switch_t::reload()
                 longpoll_update_sources_t sources;
                 for(const auto& bot_config : source_switch_.config_.bots) {
                     sources.emplace_back(std::make_shared<longpoll_update_source_t>(
-                        source_switch_.io_service_, cfg, source_switch_.config_.api_server, bot_config.api_token,
-                        std::bind(&update_source_switch_t::handle_update, &source_switch_, bot_config.api_token, std::placeholders::_1)));
+                        source_switch_.io_service_, cfg, source_switch_.config_.api_server, bot_config.api_token));
                 }
                 source_switch_.update_source_ = std::make_shared<update_source_t>(std::move(sources));
             }
@@ -74,7 +73,7 @@ void update_source_switch_t::reload()
         update_source_switch_t& source_switch_;
     } visitor{*this};
 
-    boost::apply_visitor(visitor, config_.update_source);
+    // boost::apply_visitor(visitor, config_.update_source);
 }
 
 void update_source_switch_t::stop(std::function<void()> cb)
@@ -87,37 +86,6 @@ void update_source_switch_t::stop(longpoll_update_sources_t& longpoll_sources)
 {
     for(auto& longpoll : longpoll_sources)
         longpoll->stop([longpoll](){});
-}
-
-void update_source_switch_t::handle_update(std::string api_token, nlohmann::json update_json)
-{
-    try {
-        BOOST_LOG_TRIVIAL(trace) << "New update: \n" << update_json.dump();
-        auto& message = update_json.at("message");
-        long long id = message.at("chat").at("id");
-        if(id != -1001134641359 && id != 165888502)
-            return;
-
-        api_server_->call_api(api_server_t::request_t{
-            api_token, "sendMessage", nlohmann::json{{"chat_id", id}, {"text", message.at("text")}},
-            [](std::exception_ptr ep, nlohmann::json response)
-        {
-            if(ep) {
-                std::string what;
-                try {
-                    std::rethrow_exception(ep);
-                } catch(const std::exception& ex) {
-                    what = ex.what();
-                }
-                BOOST_LOG_TRIVIAL(debug) << "Cannot send message: " << what;
-                return;
-            }
-
-            BOOST_LOG_TRIVIAL(debug) << "Sent message";
-        }});
-    } catch(const nlohmann::json::exception& ex) {
-        BOOST_LOG_TRIVIAL(debug) << "Cannot handle update: " << ex.what();
-    }
 }
 
 void update_source_switch_t::stop(update_source_t& variant_source)

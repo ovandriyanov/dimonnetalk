@@ -72,15 +72,15 @@ void inventory_t::stop(boost::asio::io_service& io_service, std::function<void()
 inventory_t make_inventory(boost::asio::io_service& io_service, fs::path config_path)
 {
     auto config_service = std::make_unique<config_service_t>(io_service, config_path);
-    auto update_source_switch = std::make_unique<update_source_switch_t>(io_service, config_service->config());
+    // auto update_source_switch = std::make_unique<update_source_switch_t>(io_service, config_service->config());
     auto api_server = std::make_unique<api_server_t>(io_service, config_service->config().api_server);
-    auto bot_store = std::make_unique<bot_store_t>(io_service, config_service->config());
+    auto bot_store = std::make_unique<bot_store_t>(io_service, config_service->config(), *api_server);
 
-    update_source_switch->init(api_server.get());
+    // update_source_switch->init(api_server.get());
 
     std::list<std::unique_ptr<service_t>> services;
     services.emplace_back(std::move(config_service));
-    services.emplace_back(std::move(update_source_switch));
+    // services.emplace_back(std::move(update_source_switch));
     services.emplace_back(std::move(api_server));
     services.emplace_back(std::move(bot_store));
 

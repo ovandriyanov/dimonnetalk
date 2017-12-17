@@ -58,7 +58,8 @@ int timer_t::async_wait(lua_State* lua_state)
         self.thread_refs.erase(ref);
 
         if(ec) throw system_error{ec, "timer"};
-        lua_resume(lua_state, NULL, 0);
+
+        resume(lua_state, 0);
     }));
 
     return lua_yield(lua_state, 0);

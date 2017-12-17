@@ -42,6 +42,7 @@ struct bot_config_t
 {
     std::string type;
     std::string api_token;
+    update_source_config_t update_source;
     boost::variant<lua_bot_config_t> type_specific_config;
     nlohmann::json bot_data;
 };
@@ -49,7 +50,6 @@ struct bot_config_t
 struct config_t
 {
     api_server_config_t api_server;
-    update_source_config_t update_source;
     std::vector<bot_config_t> bots;
 };
 

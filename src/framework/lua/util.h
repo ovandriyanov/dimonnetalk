@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <utility>
+#include <stdexcept>
 
 #include <lua.hpp>
 
@@ -40,6 +41,13 @@ static T& get_from_registry(lua_State* lua_state, const char* name)
     auto& ret = to_userdata<T>(lua_state, -1);
     lua_pop(lua_state, 1);
     return ret;
+}
+
+inline void resume(lua_State* lua_state, int narg)
+{
+    int ret = lua_resume(lua_state, nullptr, narg);
+    if(ret != LUA_OK && ret != LUA_YIELD)
+        throw std::runtime_error{std::string{"Cannot execute Lua script: "} + lua_tostring(lua_state, -1)};
 }
 
 } // namespace lua

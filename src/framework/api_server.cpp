@@ -30,8 +30,8 @@ void api_server_t::call_api(request_t request)
 {
     requests_.emplace_back(std::move(request));
     if(resume_ && requests_.size() == 1) {
-        if(ssl_) ping_timer_.cancel();
-        else (*resume_)();
+        ping_timer_.cancel();
+        (*resume_)();
     }
 }
 

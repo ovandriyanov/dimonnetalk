@@ -9,6 +9,8 @@
 #ifndef FRAMEWORK_LONGPOLL_UPDATE_SOURCE_H
 #define FRAMEWORK_LONGPOLL_UPDATE_SOURCE_H
 
+#include <list>
+
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -27,19 +29,24 @@ namespace framework {
 class longpoll_update_source_t
 {
 public:
+    using cb_t = std::function<void(std::exception_ptr, nlohmann::json)>;
+
+public:
     longpoll_update_source_t(boost::asio::io_service& io_service,
                              const longpoll_config_t& longpoll_config,
                              const api_server_config_t& api_server_config,
-                             std::string api_token,
-                             std::function<void(nlohmann::json)> update_callback);
+                             std::string api_token);
 
     const std::string& api_token() const { return api_token_; }
 
     void reload();
     void stop(std::function<void()> cb);
 
+    void get_update(cb_t callback);
+
 private:
     void stop();
+    void process_pending_updates();
 
 private:
     using ssl_stream_t = util::ssl_stream_t;
@@ -59,7 +66,6 @@ private:
     const api_server_config_t& api_server_config_;
 
     const std::string api_token_;
-    std::function<void(nlohmann::json)> update_callback_;
 
     std::string host_;
     uint16_t port_;
@@ -69,6 +75,8 @@ private:
     util::steady_timer_t timer_;
     std::unique_ptr<util::push_coro_t> resume_;
     int last_update_id_;
+    std::list<nlohmann::json> pending_updates_;
+    std::list<cb_t> callbacks_;
 };
 
 } // namespace framework
