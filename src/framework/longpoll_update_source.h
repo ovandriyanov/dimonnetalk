@@ -42,7 +42,7 @@ private:
     void stop();
 
 private:
-    using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    using ssl_stream_t = util::ssl_stream_t;
     struct ssl_t
     {
         ssl_t(boost::asio::io_service& io_service)
@@ -66,7 +66,7 @@ private:
 
     std::shared_ptr<ssl_t> ssl_;
     server_connector_t server_connector_;
-    boost::asio::steady_timer timer_;
+    util::steady_timer_t timer_;
     std::unique_ptr<util::push_coro_t> resume_;
     int last_update_id_;
 };

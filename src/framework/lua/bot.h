@@ -15,7 +15,6 @@
 
 #include "framework/bot.h"
 #include "framework/config.h"
-#include "util/coroutine.h"
 
 namespace framework {
 namespace lua {
@@ -39,7 +38,8 @@ private:
     boost::filesystem::path script_path_;
 
     std::unique_ptr<lua_State, void(*)(lua_State*)> lua_state_;
-    std::unique_ptr<util::push_coro_t> resume_;
+    lua_State* main_thread_;
+    int main_thread_ref_;
 };
 
 } // namespace lua

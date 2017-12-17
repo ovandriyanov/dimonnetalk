@@ -16,8 +16,9 @@
 
 #include <lua.hpp>
 
-#include "util/callback_wrapper.h"
 #include "framework/lua/util.h"
+#include "util/asio.h"
+#include "util/callback_wrapper.h"
 
 namespace framework {
 namespace lua {
@@ -37,8 +38,8 @@ public:
     static const char* metatable_name;
 
 public:
-    boost::asio::steady_timer timer;
-    std::list<int> callback_refs;
+    util::steady_timer_t timer;
+    std::list<int> thread_refs;
 };
 
 } // namespace io

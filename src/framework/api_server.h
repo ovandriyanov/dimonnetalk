@@ -18,6 +18,7 @@
 #include "framework/config.h"
 #include "framework/server_connector.h"
 #include "framework/service.h"
+#include "util/asio.h"
 #include "util/coroutine.h"
 
 namespace framework {
@@ -27,7 +28,7 @@ class api_server_t : public service_t
 public:
     using coro_t = boost::coroutines2::coroutine<void>;
     using cb_t = std::function<void(std::exception_ptr, nlohmann::json)>;
-    using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    using ssl_stream_t = util::ssl_stream_t;
 
     struct request_t
     {
@@ -75,7 +76,7 @@ private:
     std::shared_ptr<ssl_t> ssl_;
     server_connector_t server_connector_;
     std::list<request_t> requests_;
-    boost::asio::steady_timer ping_timer_;
+    util::steady_timer_t ping_timer_;
     std::unique_ptr<util::push_coro_t> resume_;
 };
 

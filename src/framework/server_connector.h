@@ -15,6 +15,7 @@
 #include <boost/coroutine2/all.hpp>
 #include <boost/variant.hpp>
 
+#include "util/asio.h"
 #include "util/coroutine.h"
 
 namespace framework {
@@ -23,7 +24,7 @@ class server_connector_t
 {
 public:
     using coro_t = boost::coroutines2::coroutine<void>;
-    using ssl_stream_t = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    using ssl_stream_t = util::ssl_stream_t;
 
 public:
     server_connector_t(boost::asio::io_service& io_service);
@@ -35,7 +36,7 @@ public:
     void cancel();
 
 private:
-    boost::asio::ip::tcp::resolver resolver_;
+    util::tcp_resolver_t resolver_;
 };
 
 } // namespace framework
