@@ -3,16 +3,16 @@
         "host": "api.telegram.org",
         "port": 443
     },
-    "update_source": {
-        "type": "longpoll",
-        "retry_timeout": 5,
-        "poll_timeout": 30
-    },
     "bots": [
         {
-            "name": "dimonnetalk",
+            "type": "lua",
             "script_path": "dimonnetalk.lua",
-            "api_token": "some_token"
+            "api_token": "some_token",
+            "update_source": {
+                "type": "longpoll",
+                "retry_timeout": 5,
+                "poll_timeout": 30
+            }
         }
     ]
 }
